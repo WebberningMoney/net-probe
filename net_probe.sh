@@ -11,7 +11,8 @@
 #
 # 📖 這份註解版的閱讀方式
 # ---------------------------------------------------------------------
-#  本檔「程式邏輯」與原版 v4.5 完全相同，只新增註解，方便學習。
+#  本檔為 v4.6：在原版 v4.5 加上完整註解，並修正 KI-1 ~ KI-8（見 CHANGELOG）。
+#  原版 v4.5 保留在 legacy/，可與本檔對照學習「bug 是怎麼修的」。
 #  讀的順序建議：
 #     ① 先看「整體流程」  → 知道程式在幹嘛
 #     ② 再看「第 0~2 區」 → 設定與基本工具
@@ -21,8 +22,8 @@
 #  註解符號：
 #     💡 觀念說明（為什麼這樣寫）
 #     🔰 初學者小教室（Bash / awk 語法解釋）
-#     ⚠️ KNOWN ISSUE（已知問題；為保持行為不變，本版只標註、不修改）
-#        對應 README.md 的「已知問題」表格編號 KI-1 ~ KI-7
+#     🛠 FIXED（v4.6 已修正的問題；註解保留「原本哪裡有問題」方便對照學習）
+#        對應 README.md 的「已知問題」表格編號 KI-1 ~ KI-8
 #
 # 🗺️ 整體流程（Big Picture）
 # ---------------------------------------------------------------------
@@ -115,8 +116,9 @@ CURL_URL_DEFAULT="https://speed.cloudflare.com/__down?bytes=104857600"
 CURL_URL="${1:-$CURL_URL_DEFAULT}"
 
 # ---- 1-4 Ping 行為參數 -----------------------------------------------
-# ⚠️ KNOWN ISSUE KI-6：PING_TIMEOUT_SEC 目前「沒有被任何地方使用」（死參數）。
-#    這代表 ping 其實沒有設定逾時，詳見 do_ping_once() 的 KI-3。
+# 🛠 FIXED KI-3 / KI-6：原版這個變數沒被使用（死參數），ping 等於沒有逾時。
+#    現在它會真的傳給 ping（-W 毫秒、-t 秒），每個封包最多等這麼久，
+#    斷線的目標不會再把整輪拖慢。
 PING_TIMEOUT_SEC=1
 
 # 每輪最多嘗試幾次；只要其中一次成功就算成功。
@@ -127,8 +129,17 @@ RETRY_PER_ROUND=3
 #    讓你知道程式還活著，不用等到 Ctrl+C 才看到結果。
 HEARTBEAT_INTERVAL=30
 
-# ⚠️ KNOWN ISSUE KI-6：PROGRESS_BAR_SEC 只被下方已停用的進度條使用，現已無作用。
-PROGRESS_BAR_SEC=8
+# ---- 1-6 睡眠偵測門檻（秒）-------------------------------------------
+# 兩輪之間隔超過這麼久，就視為電腦睡眠 / 網卡暫停，該輪樣本會被丟棄。
+# 💡 為什麼是 10？最壞情況一輪要 ping 3 次 × 1 秒逾時，再加 sleep 1 秒 ≈ 4 秒。
+#    原版門檻是 3 秒，目標斷線時正常的慢輪次會被誤判成睡眠。
+SLEEP_GAP_THRESHOLD=10
+
+# ---- 1-7 Curl 下載最長秒數 -------------------------------------------
+# 可用環境變數覆寫，例如：CURL_MAX_TIME=120 ./net_probe.sh
+# 🛠 FIXED KI-7：原版寫死 30 秒，網速慢時 100MiB 下載不完會被截斷、分數失真。
+# 🔰 `${VAR:-預設}`：環境變數有設就用它，否則用預設值 60。
+CURL_MAX_TIME="${CURL_MAX_TIME:-60}"
 
 
 # =====================================================================
@@ -149,6 +160,8 @@ SLEEP_GAP_SECONDS=0
 LAST_TICK=0
 # LAST_HEARTBEAT：上一次印心跳的時間。
 LAST_HEARTBEAT=0
+# SLEEP_DETECTED：這一輪開始前是否偵測到睡眠（1 = 是）。主迴圈用它決定要不要丟棄本輪。
+SLEEP_DETECTED=0
 
 # ---- 2-2 is_number：判斷字串是不是數字 --------------------------------
 # 🔰 `[[ "$1" =~ 正規表示式 ]]` 是 Bash 的「正規表示式比對」。
@@ -288,9 +301,10 @@ detect_env() {
   # --- 3-4 查詢 ISP（網路供應商）---
   # ipinfo.io/org 回傳形如 "AS12345 Some ISP Name"，sed 把前面的 AS 編號刪掉。
   # 🔰 `curl -s` = silent，不顯示進度。
-  # ⚠️ KNOWN ISSUE KI-4：沒有設定 --max-time。若網路不通，啟動時可能卡很久，
-  #    且 ISP 欄位會是空白。
-  ISP=$(curl -s https://ipinfo.io/org | sed 's/AS[0-9]* //')
+  # 🛠 FIXED KI-4：加上 --connect-timeout 3 / --max-time 5，網路不通最多等 5 秒；
+  #    查不到時顯示 Unknown，而不是空白。
+  ISP=$(curl -s --connect-timeout 3 --max-time 5 https://ipinfo.io/org 2>/dev/null | sed 's/AS[0-9]* //')
+  [[ -z "$ISP" ]] && ISP="Unknown（無法查詢）"
 }
 
 # init_logs：替每個目標建立 CSV 檔並寫入表頭
@@ -340,7 +354,7 @@ print_banner() {
   echo "--------------------------------------------------"
   echo "⚙️ 並行測試模式：每秒同時對 4 目標發送 1 包（Ping -c1）"
   echo "🔁 自動重試：單輪最多 3 次；任一成功即記成功，三次全失敗才記 timeout"
-  echo "💤 睡眠偵測：自動排除樣本間隔 >3 秒的異常時段（如睡眠、喚醒、網卡暫停）"
+  echo "💤 睡眠偵測：兩輪間隔 >${SLEEP_GAP_THRESHOLD} 秒視為睡眠，該輪樣本直接丟棄（不寫入紀錄、不列入統計）"
   echo "--------------------------------------------------"
 }
 
@@ -349,13 +363,20 @@ print_banner() {
 # 第 4 區：Ping 核心（單次 ping → 並行一輪）
 # =====================================================================
 
-# do_ping_once <索引>：對第 N 個目標 ping 一次（含重試），結果寫入 log
+# do_ping_once <索引> <流水號>：對第 N 個目標 ping 一次（含重試），結果寫入 log
 #
 # 流程：
 #   最多嘗試 RETRY_PER_ROUND 次 → 任一次有回應就停止 → 記錄延遲
 #   三次都沒回應 → 記錄 "timeout"
+#
+# 🛠 FIXED KI-8：流水號改由「父行程」算好再傳進來（第 2 個參數）。
+#    💡 原因：這個函式是用 `&` 丟到背景執行的，背景行程是父行程的「複本」，
+#       它修改全域變數 SEQ，父行程完全看不到，結果 log 裡的 seq 永遠是 1。
+#       這是 Bash 並行時最常見的陷阱：子行程不能用「改全域變數」回報結果，
+#       只能靠「參數傳進去」或「寫檔案 / 印出來」傳出來。
 do_ping_once() {
   local idx="$1"
+  local seq="$2"
   local host="${TARGETS[$idx]}"
 
   local attempt=1 ok=0 out=""
@@ -366,17 +387,19 @@ do_ping_once() {
     #    | grep "bytes from"     只留下「有回應」的那一行
     #                            例：64 bytes from 1.1.1.1: icmp_seq=0 ttl=57 time=12.3 ms
     #    || true                 grep 找不到時會回傳失敗碼；加上 true 避免被視為錯誤
-    # ⚠️ KNOWN ISSUE KI-3：沒有設定逾時。據了解 macOS ping 在沒有回應時
-    #    預設會等待相當久（可用 -W 毫秒 或 -t 秒 限制）。若某目標斷線，
-    #    一輪最多可能卡 3 次 × 等待時間，造成：
-    #      ① 「每秒一輪」的節奏被拖慢；② 被下方睡眠偵測誤判。
-    out=$(ping -n -c 1 "$host" 2>/dev/null | grep "bytes from" || true)
+    # 🛠 FIXED KI-3：加上逾時。
+    #    -W <毫秒>  等待單一回應的最長時間（macOS ping 的單位是毫秒）
+    #    -t <秒>    ping 整體最多存活幾秒，到了就結束（保險用）
+    #    原版沒有這兩個參數，據了解 macOS ping 在無回應時會等待相當久，
+    #    目標斷線時一輪可能卡 3 次 × 等待時間，拖慢「每秒一輪」的節奏。
+    #    ⚠️ 這兩個旗標依 macOS 的 man page 撰寫，請在你的 Mac 上驗證：
+    #       ping -n -c 1 -W 1000 -t 2 10.255.255.1   （應在約 1~2 秒內結束）
+    out=$(ping -n -c 1 -W $(( PING_TIMEOUT_SEC * 1000 )) -t $(( PING_TIMEOUT_SEC + 1 )) "$host" 2>/dev/null | grep "bytes from" || true)
     if [[ -n "$out" ]]; then ok=1; break; fi
     ((attempt++))
   done
 
-  # 流水號 +1。🔰 `$(( ))` 是 Bash 的整數運算。
-  SEQ[$idx]=$(( SEQ[$idx] + 1 ))
+  # （流水號 seq 已由呼叫端算好，見 do_ping_cycle_parallel）
   local now; now=$(date +'%Y-%m-%d %H:%M:%S')
 
   if (( ok == 1 )); then
@@ -384,9 +407,9 @@ do_ping_once() {
     #   第 1 個 awk 以 "time=" 切開，取後半段 "12.3 ms"
     #   第 2 個 awk 預設以空白切開，取第 1 欄 "12.3"
     local t; t=$(echo "$out" | awk -F'time=' '{print $2}' | awk '{print $1}')
-    echo "$now,${SEQ[$idx]},$t" >> "${LOGS[$idx]}"
+    echo "$now,$seq,$t" >> "${LOGS[$idx]}"
   else
-    echo "$now,${SEQ[$idx]},timeout" >> "${LOGS[$idx]}"
+    echo "$now,$seq,timeout" >> "${LOGS[$idx]}"
   fi
 }
 
@@ -401,7 +424,10 @@ do_ping_once() {
 do_ping_cycle_parallel() {
   local pids=()
   for i in "${!NAMES[@]}"; do
-    do_ping_once "$i" &
+    # 🛠 KI-8：流水號 +1 必須在「父行程」做（這裡），再把數字傳給背景子行程。
+    #    🔰 `$(( ))` 是 Bash 的整數運算。
+    SEQ[$i]=$(( SEQ[$i] + 1 ))
+    do_ping_once "$i" "${SEQ[$i]}" &
     pids+=($!)
   done
   # 等全部做完才進下一步。`|| true` 避免單一失敗讓整體中斷。
@@ -415,23 +441,26 @@ do_ping_cycle_parallel() {
 # 第 5 區：睡眠 / 長間隔偵測
 # =====================================================================
 
-# check_sleep_gap_and_note：偵測「兩輪之間隔太久」
-# 💡 原理：正常情況每輪約 1 秒。若 MacBook 闔上蓋子睡眠，醒來時距離上一輪
+# check_sleep_gap_and_note：偵測「兩輪之間隔太久」，並設定 SLEEP_DETECTED
+# 💡 原理：正常情況每輪約 1~2 秒。若 MacBook 闔上蓋子睡眠，醒來時距離上一輪
 #    可能已過了幾分鐘，這種資料不是網路問題，不應算進品質分數。
-#    作法：記錄每輪開始的 Unix 時間，與上一輪比較，超過 3 秒就視為睡眠。
+#    作法：記錄每輪開始的 Unix 時間，與上一輪比較，超過 SLEEP_GAP_THRESHOLD
+#    秒就視為睡眠。
 # 🔰 `date +%s` 回傳 Unix 時間戳（1970-01-01 起算的秒數）。
 #
-# ⚠️ KNOWN ISSUE KI-2：目前只「計數與提示」，並沒有真正把那段時間的樣本
-#    從 log 或統計中剔除；但結尾報表卻寫「已自動排除…不影響分數」，
-#    兩者不一致。
-#    （作者原註：若需嚴格剔除，可在寫入時附帶 epoch 並在 summarize 過濾）
+# 🛠 FIXED KI-2：原版只「計數與提示」，並沒有真正排除樣本，但報表卻寫
+#    「已自動排除…不影響分數」。現在偵測到睡眠時會設 SLEEP_DETECTED=1，
+#    主迴圈就會「略過」醒來後的第一輪（不 ping、不寫 log），
+#    因為網卡剛喚醒時的 timeout 不代表網路品質。
 check_sleep_gap_and_note() {
   local tick_now; tick_now=$(date +%s)
+  SLEEP_DETECTED=0
   if (( LAST_TICK > 0 )); then
     local gap=$((tick_now - LAST_TICK))
-    if (( gap > 3 )); then
+    if (( gap > SLEEP_GAP_THRESHOLD )); then
       SLEEP_GAP_COUNT=$((SLEEP_GAP_COUNT+1))
       SLEEP_GAP_SECONDS=$((SLEEP_GAP_SECONDS+gap))
+      SLEEP_DETECTED=1
     fi
   fi
   LAST_TICK=$tick_now
@@ -458,10 +487,12 @@ check_sleep_gap_and_note() {
 summarize_file() {
   local file="$1"
 
-  # 總筆數：計算含有 "timeout" 或 "," 的行數。
-  # ⚠️ KNOWN ISSUE KI-1：表頭 "time,seq,latency(ms)" 也含逗號，會被多算 1 筆，
-  #    導致 Count 多 1、丟包率偏低（例：4 筆含 1 次 timeout，應為 25%，實算 20%）。
-  local total; total=$(grep -E "timeout|," "$file" | wc -l | tr -d ' ')
+  # 總筆數：跳過第 1 行（表頭）後的行數。
+  # 🛠 FIXED KI-1：原版用 grep -E "timeout|," 計數，但表頭 "time,seq,latency(ms)"
+  #    也含逗號，被多算 1 筆，導致 Count 多 1、丟包率偏低
+  #    （例：4 筆含 1 次 timeout，應為 25%，原版算出 20%）。
+  # 🔰 awk 'NR>1' = 只輸出第 2 行以後的內容。
+  local total; total=$(awk 'NR>1' "$file" | wc -l | tr -d ' ')
   if (( total == 0 )); then
     echo "N/A,N/A,N/A,N/A,N/A,$total,0"
     return
@@ -537,11 +568,12 @@ show_minute_heartbeat() {
 #    完整原始碼保留在 legacy/ 資料夾。
 
 # run_curl_once <-4|-6> <網址>：正式執行一次 curl，回傳解析後的數據
-# 回傳格式（用 | 分隔）：DNS|TCP|SSL|TTFB|TOTAL|SPEED|CODE
+# 回傳格式（用 | 分隔）：DNS|TCP|SSL|TTFB|TOTAL|SPEED|CODE|RC
+#   RC = curl 本身的結束碼（0 = 正常；28 = 逾時，代表下載沒完成）
 #
 # 🔰 curl 參數：
 #    -4 / -6      強制走 IPv4 / IPv6
-#    -m 30        最長 30 秒（max-time）
+#    -m N         最長 N 秒（max-time；N 來自 CURL_MAX_TIME，預設 60）
 #    -o /dev/null 下載內容直接丟掉（只要量測）
 #    -sS          靜默，但出錯時仍顯示錯誤
 #    -w "..."     下載結束後，依格式輸出計時變數：
@@ -553,16 +585,19 @@ show_minute_heartbeat() {
 #       speed_download    平均下載速度（Bytes/秒）
 #       http_code         HTTP 狀態碼（200 = 成功）
 #    ⚠️ 這些時間是「從開始起算的累計值」，不是各階段耗時。
-# ⚠️ KNOWN ISSUE KI-7：-m 30 代表 30 秒後強制中止。若網速低於約 3.4 MB/s，
-#    100MiB 下載不完，Total 會被截在 30 秒，分數失真。
+# 🛠 FIXED KI-7：原版寫死 -m 30，網速低於約 3.4 MB/s 時 100MiB 下載不完，
+#    Total 被截在 30 秒，分數失真且使用者不知道。現在逾時改為 CURL_MAX_TIME
+#    （可覆寫），並回報 curl 結束碼；結束碼 28 時報表會加註警告。
+#    另外 curl 的錯誤訊息不再混進輸出（2>/dev/null），避免干擾解析。
 # 🔰 `$ipver_flag` 刻意不加引號，讓空值/旗標被 Bash 正常拆詞。
 run_curl_once() {
   local ipver_flag="$1"
   local url="$2"
-  local out
-  out=$(curl $ipver_flag -m 30 -o /dev/null -sS \
+  local out rc
+  out=$(curl $ipver_flag -m "$CURL_MAX_TIME" -o /dev/null -s \
         -w "dns=%{time_namelookup} tcp=%{time_connect} ssl=%{time_appconnect} ttfb=%{time_starttransfer} total=%{time_total} speed=%{speed_download} code=%{http_code}" \
-        "$url" 2>&1)
+        "$url" 2>/dev/null)
+  rc=$?
   # 解析 "key=value key=value ..." ：
   # 以 "dns=" 切開取後半，再取第一個空白前的內容，其餘欄位同理。
   local DNS TCP SSL TTFB TOTAL SPEED CODE
@@ -573,7 +608,7 @@ run_curl_once() {
   TOTAL=$(echo "$out" | awk -F'total=' '{print $2}' | awk '{print $1}')
   SPEED=$(echo "$out" | awk -F'speed=' '{print $2}' | awk '{print $1}')
   CODE=$( echo "$out" | awk -F'code='  '{print $2}')
-  echo "$DNS|$TCP|$SSL|$TTFB|$TOTAL|$SPEED|$CODE"
+  echo "$DNS|$TCP|$SSL|$TTFB|$TOTAL|$SPEED|$CODE|$rc"
 }
 
 # curl_probe_stack：run_curl_once 的薄包裝
@@ -696,6 +731,7 @@ print_curl_summary() {
   local T4=$(echo "$v4" | cut -d'|' -f5)
   local sp4=$(echo "$v4" | cut -d'|' -f6)
   local h4=$(echo "$v4" | cut -d'|' -f7)
+  local rc4=$(echo "$v4" | cut -d'|' -f8)
 
   # 速度人性化：curl 給的是 Bytes/秒。
   #   ≥ 1048576 (1 MiB) → 轉成 MB/s；否則轉成 kB/s。
@@ -710,7 +746,7 @@ print_curl_summary() {
   local gr4; gr4=$(grade_text "$sc4")
 
   # ---- IPv6（只有偵測到可用位址才測）----
-  local d6="" c6="" s6="" t6="" T6="" sp6="" h6="" sp6_human="N/A" sc6="N/A" gr6="N/A"
+  local d6="" c6="" s6="" t6="" T6="" sp6="" h6="" rc6="" sp6_human="N/A" sc6="N/A" gr6="N/A"
   if [[ "$ipv6_ok" == "1" ]]; then
     local v6; v6=$(curl_probe_stack "-6" "IPv6" "$CURL_URL")
     d6=$(echo "$v6" | cut -d'|' -f1)
@@ -720,6 +756,7 @@ print_curl_summary() {
     T6=$(echo "$v6" | cut -d'|' -f5)
     sp6=$(echo "$v6" | cut -d'|' -f6)
     h6=$(echo "$v6" | cut -d'|' -f7)
+    rc6=$(echo "$v6" | cut -d'|' -f8)
     if is_number "$sp6" && awk -v x="$sp6" 'BEGIN{exit !(x>=1048576)}'; then
       sp6_human=$(awk -v b="$sp6" 'BEGIN{printf "%.1f MB/s", b/1048576}')
     elif is_number "$sp6"; then
@@ -753,6 +790,14 @@ print_curl_summary() {
               "$sp6_human" "$sc6" "$gr6" "$h6"
   else
     echo "(已略過 IPv6：未偵測到可用全球 IPv6 位址)"
+  fi
+
+  # 🛠 KI-7：curl 結束碼 28 = 逾時。下載沒跑完，Total 被截斷，分數只能參考。
+  if [[ "${rc4:-}" == "28" ]]; then
+    echo "⚠️ IPv4 下載在 ${CURL_MAX_TIME} 秒內未完成（逾時），Total 被截斷，分數僅供參考"
+  fi
+  if [[ "${rc6:-}" == "28" ]]; then
+    echo "⚠️ IPv6 下載在 ${CURL_MAX_TIME} 秒內未完成（逾時），Total 被截斷，分數僅供參考"
   fi
 
   # ---- 對比：誰較佳 ----
@@ -855,20 +900,27 @@ print_overall() {
 
 # finish：被 `trap finish INT` 觸發。依序輸出三份報表後結束。
 #
-# 🔰 `$(... | tee /dev/tty)`：
-#    - tee 會「一邊顯示到畫面（/dev/tty = 你的終端機）、一邊把內容往下傳」，
-#      讓我們同時做到「即時顯示」與「把文字存進變數」。
-#    - 變數 ping_output / curl_output 會被交給 print_overall 去解析。
-# ⚠️ KNOWN ISSUE KI-5：/dev/tty 只有在「有終端機」時存在。
-#    若用排程（cron/launchd）或導向檔案方式執行，會因沒有 tty 而出錯。
+# 🛠 FIXED KI-5：原版用 `$(... | tee /dev/tty)` 同時「顯示 + 存進變數」，
+#    但 /dev/tty 只有在「有終端機」時才存在，用排程（cron/launchd）或把輸出
+#    導向檔案時會出錯。
+#    現在改成：先把報表寫進暫存檔 → cat 顯示 → 再讀進變數。
+#    🔰 mktemp 建立一個唯一名稱的暫存檔；`rm -f` 用完就刪。
+#    變數 ping_output / curl_output 會被交給 print_overall 去解析。
 finish() {
+  local tmp; tmp=$(mktemp "${TMPDIR:-/tmp}/net_probe.XXXXXX")
+
   local ping_output
-  ping_output=$(print_ping_summary | tee /dev/tty)
+  print_ping_summary > "$tmp"
+  cat "$tmp"
+  ping_output=$(cat "$tmp")
 
   echo ""
   echo "🔍 進行 IPv4/IPv6 雙協定 HTTP / HTTPS 100 MB 下載實測（Curl 模組）"
   local curl_output
-  curl_output=$(print_curl_summary | tee /dev/tty)
+  print_curl_summary > "$tmp"
+  cat "$tmp"
+  curl_output=$(cat "$tmp")
+  rm -f "$tmp"
 
   print_overall "$ping_output" "$curl_output"
 
@@ -895,6 +947,12 @@ count=0
 while true; do
   # (a) 檢查是否剛從睡眠醒來
   check_sleep_gap_and_note
+  # (a2) 剛從睡眠醒來 → 丟棄這一輪（不 ping、不寫 log），休息後重新開始。
+  #      🔰 `continue` 會跳過迴圈剩下的部分，直接進入下一圈。
+  if (( SLEEP_DETECTED == 1 )); then
+    sleep 1
+    continue
+  fi
   # (b) 四路並行 ping 一次
   do_ping_cycle_parallel
   ((count++))
