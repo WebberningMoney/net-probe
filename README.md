@@ -81,14 +81,21 @@
 **① 打開「終端機」**
 按 `⌘ + 空白鍵`，輸入 `終端機`（或 `Terminal`），按 Enter。
 
-**② 下載並進入資料夾**
+**② 先決定放在哪裡，再下載並進入資料夾**
+
+> ⚠️ 終端機一打開預設在「家目錄」（`~`）。請**先 `cd` 到你想放的位置**，再 clone，否則檔案會散落在家目錄。
+
+放在**桌面**（找檔案最方便）：
 
 ```bash
+cd ~/Desktop
 git clone https://github.com/WebberningMoney/net-probe.git
 cd net-probe
 ```
 
-> 不會用 git？到 GitHub 頁面按綠色 **Code → Download ZIP**，解壓縮後在終端機輸入 `cd ` 再把資料夾拖進視窗、按 Enter。
+想放在「下載」資料夾？把第一行換成 `cd ~/Downloads` 即可。
+
+> 不會用 git？到 GitHub 頁面按綠色 **Code → Download ZIP**，解壓縮後在終端機輸入 `cd `（cd 後面有一個空格），再把資料夾拖進終端機視窗、按 Enter。
 
 **③ 執行**
 
@@ -98,6 +105,20 @@ chmod +x net_probe.sh     # 第一次需要：允許這支檔案被執行
 ```
 
 讓它跑一段時間（建議至少 5 分鐘；想抓「晚間尖峰」問題就跑 1 小時以上），然後按 **`Ctrl + C`** 看報告。
+按下後請再等一下：程式會接著做 Curl 下載實測（約十幾秒到一分鐘），完成後才會出現最後的「綜合總結」。
+
+### 📂 之後再次使用
+
+每次打開新的終端機視窗，都要**先進到資料夾**才能執行（放在桌面的話）：
+
+```bash
+cd ~/Desktop/net-probe
+./net_probe.sh
+```
+
+- **測試紀錄檔（`.log`）會存在你執行時所在的資料夾**，也就是 `~/Desktop/net-probe/`。想在 Finder 打開：在終端機輸入 `open .`。
+- **想更新到最新版**：在 `~/Desktop/net-probe` 裡執行 `git pull`。
+- **如果出現 `No such file or directory`**：代表你不在這個資料夾，先 `cd ~/Desktop/net-probe`。用 `pwd` 可以看目前位置、`ls` 可以看這裡有什麼檔案。
 
 **進階：自訂下載測速檔**
 
@@ -237,6 +258,9 @@ A：忘了加執行權限。輸入 `chmod +x net_probe.sh` 再試一次。
 
 **Q：出現 `This script is macOS-only`？**
 A：這是刻意設計，因為用到 macOS 專屬指令。Windows / Linux 暫不支援。
+
+**Q：出現 `fatal: not a git repository` 或 `No such file or directory`？**
+A：你不在專案資料夾裡。輸入 `cd ~/Desktop/net-probe`（依你放的位置調整）再試一次；還沒下載過的話，請從「快速開始」的步驟 ② 開始。
 
 **Q：為什麼 IPv6 被略過？**
 A：你的網路（或路由器）沒有分配 IPv6，屬正常情況。

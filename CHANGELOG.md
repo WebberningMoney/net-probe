@@ -3,6 +3,7 @@
 格式參考 [Keep a Changelog](https://keepachangelog.com/)。
 
 ## [Unreleased]
+- 文件：README 快速開始補充存放位置（桌面）、再次執行方式、log 位置與相關 FAQ
 - 規劃中：MOS 分數、負載下延遲、告警通知、歷史趨勢圖、GUI
 
 ## [4.6] - 2026-11-09
