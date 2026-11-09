@@ -13,8 +13,9 @@
 <h1>net-probe 儀表板 <small>簡易版（完整介面在 Phase 4）</small></h1>
 <p>最新一秒：<span id="ts">—</span></p>
 <p id="diag" style="padding:.6rem .9rem;background:#f3f6fa;border-radius:6px"></p>
-<table><thead><tr><th>目標</th><th>目前(ms)</th><th>平均</th><th>p50</th><th>p95</th><th>抖動</th><th>丟包%</th><th>分數</th><th>MOS</th></tr></thead>
+<table><thead><tr><th>目標</th><th title="最近一秒的延遲（毫秒）；逾時代表沒收到回應" style="cursor:help">目前(ms)</th><th title="過去 5 分鐘的平均延遲（毫秒）" style="cursor:help">平均</th><th title="中位數：一半的樣本比它快，不受偶爾尖峰影響" style="cursor:help">p50</th><th title="95% 的樣本都比它快；愈大代表偶爾的尖峰愈明顯" style="cursor:help">p95</th><th title="連續兩次延遲的平均差距；愈大代表愈不穩定" style="cursor:help">抖動</th><th title="沒收到回應的比例" style="cursor:help">丟包%</th><th title="與 Bash 版相同的 Ping 分數（100 − 丟包×2 − 平均÷2 − 抖動×1.5）" style="cursor:help">分數</th><th title="通話品質分（1–4.5）：4.3+極佳、4.0+良好、3.6+尚可、3.1以下很差。看延遲、抖動、丟包，對偶爾的尖峰較寬容" style="cursor:help">MOS</th></tr></thead>
 <tbody id="rows"></tbody></table>
+<p><small>💡 MOS＝通話品質分（滿分約 4.4）：4.3 以上極佳｜4.0–4.3 良好｜3.6–4.0 尚可｜3.1 以下很差。滑鼠移到表頭可看各欄位說明。</small></p>
 <h3>最近警示</h3><ul id="alerts"><li><small>尚無</small></li></ul>
 <script>
 let latest = {};
