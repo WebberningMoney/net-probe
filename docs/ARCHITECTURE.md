@@ -1,4 +1,4 @@
-# 本機網頁儀表板：架構與技術選型（提案 v0）
+# 本機網頁儀表板：架構與技術選型（v1，已依作者決定更新）
 
 > 狀態：**提案，尚未實作**。等作者確認「待決事項」後才開始寫程式。
 > 現有的 `net_probe.sh`（Bash 版）不受影響，會繼續保留。
@@ -43,10 +43,10 @@
 
 | 層級 | 推薦 | 理由 | 備選（取捨） |
 |---|---|---|---|
-| 後端語言 | **Python 3，只用標準庫** | Mac 常見已有 Python（作者終端機有 conda）；不用 `pip install`；語法易讀，適合當教材 | Node.js（需另裝）、Go/Swift（編譯較複雜，學習門檻高） |
-| 網頁伺服器 | `http.server`（`ThreadingHTTPServer`） | 標準庫內建，足以服務單機一個使用者 | FastAPI + uvicorn（較現代，但需 `pip install`） |
+| 後端語言 | **Python 3.13**（作者環境 3.13.5） | 語法易讀，適合當教材；作者已同意使用 `pip install` | Node.js（需另裝）、Go/Swift（編譯較複雜） |
+| 網頁伺服器 | **FastAPI + uvicorn**（裝在專案專用的 venv，版本固定於 requirements.txt） | 現代、SSE 與 API 寫法簡潔；venv 與系統／conda 環境隔離，不污染也不受干擾 | 標準庫 `http.server`（零安裝但程式較冗長） |
 | 取得 ping | 呼叫系統 `ping`（`subprocess`） | 不需 root 權限；沿用已在 Mac 驗證過的 `-W/-t` 旗標 | 自己送 ICMP（需 root，不建議） |
-| 即時更新 | **SSE**（Server-Sent Events） | 單向推送，比 WebSocket 簡單，標準庫即可實作 | 每秒輪詢（最簡單，稍微浪費） |
+| 即時更新 | **SSE**（Server-Sent Events） | 單向推送，比 WebSocket 簡單，FastAPI 內建支援 | 每秒輪詢（最簡單，稍微浪費） |
 | 資料庫 | **SQLite**（標準庫 `sqlite3`） | 單一檔案、免安裝、可查詢歷史、可匯出 CSV | 繼續只用 CSV（難做區間查詢與彙總） |
 | 前端 | **單一 HTML + 原生 JavaScript** | 無建置步驟（不用 npm / webpack），打開就能改 | React/Vue（需建置工具，對本專案過重） |
 | 圖表 | **Chart.js**（把檔案放進 repo，離線可用） | 易學、文件多、MIT 授權 | uPlot（效能更好，適合超長時間序列，但 API 較不直覺） |
@@ -112,7 +112,18 @@ net-probe/
 - 開發環境不是 macOS，因此：**統計、MOS、彙總、告警邏輯**會用假資料做自動化測試；**真實 ping 與系統通知**需要在作者的 Mac 上手動驗證。
 - 每個功能完成後提供「Mac 驗證清單」（幾行指令加預期結果），延續本專案已採用的做法。
 
-## 8. 待決事項
+## 8. 已定案的決策
+
+1. 技術軸：Python 3.13 + FastAPI + uvicorn（venv）+ SQLite + 原生 JS + Chart.js。啟動腳本自動建立 venv 並安裝 `requirements.txt`。
+2. 資料保留：原始樣本 24 小時；每分鐘彙總 90 天。
+3. 介面語言：繁體中文。
+4. 第一版目標清單只改 `config.json`，網頁上不編輯。
+5. 儀表板含 Curl 下載測速（手動按鈕＋可選的定期執行，預設關閉）。
+6. 測試模式：「持續監測」與「定時測試 N 分鐘」兩種皆提供（與 Bash 版 v4.9 的時長選擇一致）。
+7. 開發順序：Phase 1 Bash 時長選擇 → Phase 2 儀表板核心 → Phase 3 路由器 ping 與告警 → Phase 4 網頁介面與歷史趨勢。
+8. 服務只綁定 127.0.0.1（預設埠 8765），不對外開放。
+
+## 9. 原待決事項（歷史紀錄）
 
 1. 技術軸是否採用「Python 標準庫 + SQLite + 原生 JS + Chart.js」？（推薦）
 2. 資料保留期限：原始樣本保留多久？彙總保留多久？

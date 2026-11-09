@@ -11,7 +11,7 @@
 #
 # 📖 這份註解版的閱讀方式
 # ---------------------------------------------------------------------
-#  本檔為 v4.8：在原版 v4.5 加上完整註解，並修正 KI-1 ~ KI-12（見 CHANGELOG）。
+#  本檔為 v4.9：在原版 v4.5 加上完整註解，並修正 KI-1 ~ KI-12（見 CHANGELOG）。
 #  原版 v4.5 保留在 legacy/，可與本檔對照學習「bug 是怎麼修的」。
 #  讀的順序建議：
 #     ① 先看「整體流程」  → 知道程式在幹嘛
@@ -29,18 +29,21 @@
 # ---------------------------------------------------------------------
 #   啟動
 #    │
+#    ├─ parse_args      解析命令列參數（-d / -n / --forever / --no-curl）
+#    ├─ choose_run_mode 沒指定測試時長 → 顯示選單問你（非互動環境用預設 5 分鐘）
 #    ├─ detect_env      偵測系統版本、網卡、本機 IP、ISP
 #    ├─ init_logs       替每個目標建立一個 CSV 紀錄檔
-#    ├─ print_banner    印出開頭資訊
+#    ├─ print_banner / print_run_plan   印出開頭資訊與「本次測試計畫」
 #    ├─ trap finish INT 設定：按下 Ctrl+C 時，不要直接死掉，去執行 finish()
 #    │
-#    └─ 無限迴圈（每秒一輪）
-#         ├─ check_sleep_gap_and_note   檢查電腦是否剛睡醒
+#    └─ 迴圈（每秒約一輪），直到「時間 / 輪數到了」或你按 Ctrl+C
+#         ├─ check_sleep_gap_and_note   檢查電腦是否剛睡醒（是 → 丟棄這一輪）
 #         ├─ do_ping_cycle_parallel     4 個目標「同時」各 ping 1 次
-#         ├─ （每 30 秒）show_minute_heartbeat  印出目前累積平均分數
+#         ├─ （每 30 秒）show_minute_heartbeat  印出累積平均分數 + 測試進度
+#         ├─ run_finished               時間 / 輪數到了嗎？到了就跳出迴圈
 #         └─ sleep 1
 #
-#   使用者按 Ctrl+C
+#   時間到（自動）或 使用者按 Ctrl+C（提前結束）
 #    └─ finish()
 #         ├─ 1. print_ping_summary   Ping 統計表 + 評分
 #         ├─ 2. print_curl_summary   Curl 下載實測（IPv4 / IPv6）
@@ -65,9 +68,14 @@
 # ▶ 使用方式
 # ---------------------------------------------------------------------
 #   chmod +x net_probe.sh
-#   ./net_probe.sh                         # 使用預設 Cloudflare 約 90MB 測速檔
-#   ./net_probe.sh "https://example.com/big.bin"   # 自訂 Curl 測速網址（第 1 個參數）
-#   按 Ctrl+C 結束測試並顯示完整報表
+#   ./net_probe.sh                  # 顯示選單，讓你選要測多久（Enter = 5 分鐘）
+#   ./net_probe.sh -d 15            # 測 15 分鐘，時間到自動出報告
+#   ./net_probe.sh -n 300           # 測 300 輪（1 輪約 1.1 秒）
+#   ./net_probe.sh --forever        # 持續測試，按 Ctrl+C 結束
+#   ./net_probe.sh --no-curl        # 結束時不做 Curl 下載測速
+#   ./net_probe.sh "https://example.com/big.bin"   # 自訂 Curl 測速網址
+#   ./net_probe.sh -h               # 顯示完整說明
+#   任何時候按 Ctrl+C 都可以提前結束並顯示完整報表
 # =====================================================================
 
 
@@ -110,7 +118,7 @@ TARGETS=("101.101.101.101" "168.95.1.1" "1.1.1.1" "8.8.8.8")
 NAMES=("TWNIC"             "HiNet"      "Cloudflare" "GoogleDNS")
 
 # ---- 1-3 Curl 測速檔案網址 -------------------------------------------
-# 🔰 `${1:-預設值}`：若執行時有給第 1 個參數就用它，否則用預設值。
+# 💡 測速網址也可以在執行時指定（最後一個不以 - 開頭的參數），見 parse_args。
 #    bytes=90000000 ≈ 90 MB（十進位）。
 # 🛠 FIXED KI-12：原版是 bytes=104857600（100 MiB），但 Cloudflare 現在規定
 #    bytes 必須「小於 100,000,000」，等於或大於就回 HTTP 403 拒絕。
@@ -119,7 +127,7 @@ NAMES=("TWNIC"             "HiNet"      "Cloudflare" "GoogleDNS")
 # 💡 觀念：第三方服務的參數限制「會變」，所以要檢查 HTTP 狀態碼（見 KI-9），
 #    而不是假設請求一定成功。
 CURL_URL_DEFAULT="https://speed.cloudflare.com/__down?bytes=90000000"
-CURL_URL="${1:-$CURL_URL_DEFAULT}"
+CURL_URL="$CURL_URL_DEFAULT"
 
 # ---- 1-4 Ping 行為參數 -----------------------------------------------
 # 🛠 FIXED KI-3 / KI-6：原版這個變數沒被使用（死參數），ping 等於沒有逾時。
@@ -146,6 +154,21 @@ SLEEP_GAP_THRESHOLD=10
 # 🛠 FIXED KI-7：原版寫死 30 秒，網速慢時 90MB 下載不完會被截斷、分數失真。
 # 🔰 `${VAR:-預設}`：環境變數有設就用它，否則用預設值 60。
 CURL_MAX_TIME="${CURL_MAX_TIME:-60}"
+
+# ---- 1-8 本次測試要跑多久 ---------------------------------------------
+# 由「命令列參數」或「啟動選單」決定（見第 10 區 parse_args / choose_run_mode）。
+#   RUN_MODE：duration（跑 N 分鐘）｜rounds（跑 N 輪）｜forever（持續到 Ctrl+C）
+# 💡 為什麼要有這個？原版一啟動就無限跑，只能靠 Ctrl+C 結束，
+#    新手不知道該跑多久。現在可以事先決定，時間到自動出報告。
+RUN_MODE=""
+RUN_DURATION_MIN=0
+RUN_ROUNDS=0
+# RUN_START：正式開始測試的時間（Unix 秒），用來計算已經跑了多久。
+RUN_START=0
+# DO_CURL：結束時要不要做 Curl 下載測速（1 = 要，0 = 不要）。
+DO_CURL=1
+# 選單的預設時間（分鐘）。非互動環境（排程等）沒辦法問人，就直接用它。
+DEFAULT_DURATION_MIN=5
 
 
 # =====================================================================
@@ -558,7 +581,7 @@ show_minute_heartbeat() {
   if [[ ${#parts[@]} -gt 0 ]]; then
     local line; line=$(printf "%s / " "${parts[@]}")
     line="${line% / }"
-    echo -e "⏱ $(date '+%H:%M:%S') 平均分數：$line"
+    echo -e "⏱ $(date '+%H:%M:%S') 平均分數：$line ｜ $(progress_text)"
   fi
 }
 
@@ -919,7 +942,9 @@ print_overall() {
   # ---- 輸出綜合總結 ----
   echo "✅ Ping：${best_ping_domain:-Unknown} (${best_ping_ip:-N/A}) 最穩定（Score ${best_ping_score:-N/A} ${best_ping_grade:-N/A}）"
   # 🛠 KI-9：沒有任何有效 Curl 成績時，明說「失敗」，不要印「N/A 較佳」。
-  if [[ "$best_curl_score" == "N/A" ]]; then
+  if [[ -z "$curl_data" ]]; then
+    echo "ℹ️ Curl：已略過（--no-curl）"
+  elif [[ "$best_curl_score" == "N/A" ]]; then
     echo "⚠️ Curl：沒有有效成績（下載失敗，請看上方 HTTP 狀態碼）"
   else
     echo "✅ Curl：${best_curl_ipv:-IPv4} 較佳（Score ${best_curl_score:-N/A} ${best_curl_grade:-N/A}）"
@@ -934,7 +959,8 @@ print_overall() {
 # 第 9 區：結束流程（Ctrl+C 之後做的事）
 # =====================================================================
 
-# finish：被 `trap finish INT` 觸發。依序輸出三份報表後結束。
+# finish：測試時間到（自動），或被 `trap finish INT`（你按 Ctrl+C）觸發。
+#   依序輸出三份報表後結束。
 #
 # 🛠 FIXED KI-5：原版用 `$(... | tee /dev/tty)` 同時「顯示 + 存進變數」，
 #    但 /dev/tty 只有在「有終端機」時才存在，用排程（cron/launchd）或把輸出
@@ -944,18 +970,24 @@ print_overall() {
 #    變數 ping_output / curl_output 會被交給 print_overall 去解析。
 finish() {
   local tmp; tmp=$(mktemp "${TMPDIR:-/tmp}/net_probe.XXXXXX")
+  # 報表輸出期間若再按一次 Ctrl+C：清掉暫存檔並中止（否則會重複進入 finish）。
+  # 🔰 trap 的指令用單引號，變數 $tmp 等到「真的觸發」時才展開。
+  trap 'rm -f "$tmp"; echo ""; echo "⚠️ 已中止報表輸出"; exit 130' INT
 
   local ping_output
   print_ping_summary > "$tmp"
   cat "$tmp"
   ping_output=$(cat "$tmp")
 
-  echo ""
-  echo "🔍 進行 IPv4/IPv6 雙協定 HTTP / HTTPS 約 90 MB 下載實測（Curl 模組）"
-  local curl_output
-  print_curl_summary > "$tmp"
-  cat "$tmp"
-  curl_output=$(cat "$tmp")
+  # DO_CURL=0（--no-curl）時整段略過，curl_output 保持空字串。
+  local curl_output=""
+  if (( DO_CURL == 1 )); then
+    echo ""
+    echo "🔍 進行 IPv4/IPv6 雙協定 HTTP / HTTPS 約 90 MB 下載實測（Curl 模組）"
+    print_curl_summary > "$tmp"
+    cat "$tmp"
+    curl_output=$(cat "$tmp")
+  fi
   rm -f "$tmp"
 
   print_overall "$ping_output" "$curl_output"
@@ -965,21 +997,216 @@ finish() {
 
 
 # =====================================================================
+# 第 10 區：本次測試要跑多久（參數 / 選單 / 進度 / 停止條件）
+# =====================================================================
+
+# usage：印出說明。
+# 🔰 `cat <<'EOF' ... EOF` 叫 here-document：把中間整段文字原封不動交給 cat 印出。
+#    EOF 兩邊加單引號 = 不展開變數，所以下面文字裡寫死「5 分鐘」
+#    （若改了 DEFAULT_DURATION_MIN，記得同步改這段說明）。
+usage() {
+  cat <<'EOF'
+用法：./net_probe.sh [選項] [測速網址]
+
+選項：
+  -d, --duration <分鐘>   測試幾分鐘後自動結束並出報告（例：-d 10）
+  -n, --rounds <輪數>     測試幾輪後自動結束並出報告（1 輪約 1.1 秒，例：-n 300）
+      --forever           持續測試，按 Ctrl+C 結束並出報告
+      --no-curl           結束時不做 Curl 下載測速
+  -h, --help              顯示這份說明
+
+沒有指定 -d / -n / --forever 時：
+  在終端機執行 → 顯示選單讓你選擇（直接按 Enter = 5 分鐘）
+  非互動環境（排程、輸出導向檔案）→ 直接使用 5 分鐘
+
+任何時候按 Ctrl+C 都可以提前結束並出報告。
+
+範例：
+  ./net_probe.sh                       # 顯示選單
+  ./net_probe.sh -d 15                 # 測 15 分鐘
+  ./net_probe.sh -n 300 --no-curl      # 測 300 輪，不做下載測速
+  ./net_probe.sh "https://example.com/file.bin"   # 自訂測速網址
+EOF
+}
+
+# require_positive_int <選項名> <值>：檢查值是不是 ≥ 1 的整數，不是就報錯結束。
+# 🔰 `10#$val`：強制用十進位解讀。否則 Bash 會把 "08" 當成（不合法的）八進位。
+#    `>&2` 把訊息送到「標準錯誤」，exit 2 代表「用法錯誤」（慣例）。
+require_positive_int() {
+  local opt="$1" val="$2"
+  if ! [[ "$val" =~ ^[0-9]+$ ]] || (( 10#$val < 1 )); then
+    echo "錯誤：$opt 需要一個 ≥ 1 的整數（例如 $opt 10）" >&2
+    exit 2
+  fi
+}
+
+# parse_args：解析命令列參數。
+# 🔰 `while (( $# > 0 ))`：$# 是剩下幾個參數；每處理完就 `shift` 把它丟掉。
+#    `case` 依參數長相分派；-d 這類「帶值」的選項要 shift 2（選項 + 值）。
+#    `"${2:-}"` 讓「沒給值」時得到空字串，而不是因 set -u 而當掉。
+parse_args() {
+  local mode_count=0
+  while (( $# > 0 )); do
+    case "$1" in
+      -h|--help)
+        usage
+        exit 0;;
+      -d|--duration)
+        require_positive_int "$1" "${2:-}"
+        RUN_MODE="duration"; RUN_DURATION_MIN=$((10#$2))
+        mode_count=$((mode_count + 1)); shift 2;;
+      -n|--rounds)
+        require_positive_int "$1" "${2:-}"
+        RUN_MODE="rounds"; RUN_ROUNDS=$((10#$2))
+        mode_count=$((mode_count + 1)); shift 2;;
+      --forever)
+        RUN_MODE="forever"
+        mode_count=$((mode_count + 1)); shift;;
+      --no-curl)
+        DO_CURL=0; shift;;
+      -*)
+        echo "錯誤：不認得的選項 $1（用 -h 看說明）" >&2
+        exit 2;;
+      *)
+        # 不以 - 開頭的參數 = 自訂測速網址（相容舊用法）
+        CURL_URL="$1"; shift;;
+    esac
+  done
+  if (( mode_count > 1 )); then
+    echo "錯誤：-d / -n / --forever 只能擇一" >&2
+    exit 2
+  fi
+}
+
+# choose_run_mode：在終端機顯示選單，讓使用者決定要測多久。
+# 🔰 `read -r -p "提示" 變數`：顯示提示並等使用者輸入一行。
+#    `|| true`：輸入被中斷（例如 Ctrl+D）時不要讓程式出錯。
+#    `${choice:-1}`：沒輸入（直接按 Enter）就當成 1。
+# 💡 約略換算：1 輪 ≈ 1.1 秒（作者 Mac 實測），所以 N 分鐘 ≈ N×60×10/11 輪。
+choose_run_mode() {
+  local choice="" unit="" amount=""
+  echo "🔧 要測多久？"
+  echo "  1) ${DEFAULT_DURATION_MIN} 分鐘（約 $(( DEFAULT_DURATION_MIN * 60 * 10 / 11 )) 輪）  ← 預設"
+  echo "  2) 15 分鐘"
+  echo "  3) 1 小時"
+  echo "  4) 自訂（輸入分鐘數或輪數）"
+  echo "  5) 持續測試，按 Ctrl+C 結束"
+  read -r -p "請選擇 [1-5，直接按 Enter = 1]：" choice || true
+  case "${choice:-1}" in
+    1) RUN_MODE="duration"; RUN_DURATION_MIN=$DEFAULT_DURATION_MIN;;
+    2) RUN_MODE="duration"; RUN_DURATION_MIN=15;;
+    3) RUN_MODE="duration"; RUN_DURATION_MIN=60;;
+    4)
+      read -r -p "單位：m = 分鐘、r = 輪數 [m/r，Enter = m]：" unit || true
+      read -r -p "數量（整數）：" amount || true
+      if [[ "$amount" =~ ^[0-9]+$ ]] && (( 10#$amount >= 1 )); then
+        if [[ "${unit:-m}" == "r" || "${unit:-m}" == "R" ]]; then
+          RUN_MODE="rounds"; RUN_ROUNDS=$((10#$amount))
+        else
+          RUN_MODE="duration"; RUN_DURATION_MIN=$((10#$amount))
+        fi
+      else
+        echo "⚠️ 數量無效，改用預設 ${DEFAULT_DURATION_MIN} 分鐘"
+        RUN_MODE="duration"; RUN_DURATION_MIN=$DEFAULT_DURATION_MIN
+      fi;;
+    5) RUN_MODE="forever";;
+    *)
+      echo "⚠️ 無效的選項「$choice」，改用預設 ${DEFAULT_DURATION_MIN} 分鐘"
+      RUN_MODE="duration"; RUN_DURATION_MIN=$DEFAULT_DURATION_MIN;;
+  esac
+  echo ""
+}
+
+# print_run_plan：開測前印出「本次測試計畫」，讓使用者確認自己選對了。
+print_run_plan() {
+  case "$RUN_MODE" in
+    duration)
+      echo "▶ 本次測試：${RUN_DURATION_MIN} 分鐘（約 $(( RUN_DURATION_MIN * 60 * 10 / 11 )) 輪），時間到自動結束並出報告";;
+    rounds)
+      local sec=$(( RUN_ROUNDS * 11 / 10 ))
+      echo "▶ 本次測試：${RUN_ROUNDS} 輪（約 $(( sec / 60 )) 分 $(( sec % 60 )) 秒），跑完自動結束並出報告";;
+    *)
+      echo "▶ 本次測試：持續進行，按 Ctrl+C 結束並出報告";;
+  esac
+  if (( DO_CURL == 1 )); then
+    echo "▶ 結束後會做 Curl 下載測速（約 90 MB，IPv4 / IPv6 各一次）"
+  else
+    echo "▶ 已略過 Curl 下載測速（--no-curl）"
+  fi
+  echo "▶ 隨時按 Ctrl+C 可提前結束並出報告"
+  echo "--------------------------------------------------"
+}
+
+# progress_text：回傳「目前測試進度」文字，附在心跳行後面。
+# 💡 duration 模式用「有效經過時間」= 現在 − 開始 − 睡眠被排除的秒數，
+#    這樣電腦睡了一段時間，也不會讓進度條虛增、測試提早結束。
+# 🔰 `printf` 的 %d 是整數、%02d 是「至少 2 位數，不足補 0」（例：3 秒 → 03）。
+progress_text() {
+  local now; now=$(date +%s)
+  local eff=$(( now - RUN_START - SLEEP_GAP_SECONDS ))
+  (( eff < 0 )) && eff=0
+  case "$RUN_MODE" in
+    duration)
+      local total=$(( RUN_DURATION_MIN * 60 ))
+      local pct=$(( eff * 100 / total ))
+      (( pct > 100 )) && pct=100
+      local rem=$(( total - eff ))
+      (( rem < 0 )) && rem=0
+      printf "進度 %d%%｜剩餘 %d:%02d" "$pct" $(( rem / 60 )) $(( rem % 60 ));;
+    rounds)
+      printf "進度 %d/%d（%d%%）" "$count" "$RUN_ROUNDS" $(( count * 100 / RUN_ROUNDS ));;
+    *)
+      printf "已測 %d 輪｜%d:%02d" "$count" $(( eff / 60 )) $(( eff % 60 ));;
+  esac
+}
+
+# run_finished：測試該結束了嗎？該結束 → 成功（0）；還沒 → 失敗（1）。
+# 💡 shell 慣例：函式的回傳碼 0 = 「是」，所以可以直接寫 `if run_finished; then`。
+run_finished() {
+  case "$RUN_MODE" in
+    duration)
+      local eff=$(( $(date +%s) - RUN_START - SLEEP_GAP_SECONDS ))
+      (( eff >= RUN_DURATION_MIN * 60 ));;
+    rounds)
+      (( count >= RUN_ROUNDS ));;
+    *)
+      return 1;;
+  esac
+}
+
+
+# =====================================================================
 # 主程式 Main：真正「開始跑」的地方
 # =====================================================================
 
-# 1. 偵測環境 → 2. 建立 log → 3. 印橫幅
+# 0. 解析命令列參數；沒指定測試時長 → 問使用者（或使用預設）
+# 🔰 `[[ -t 0 && -t 1 ]]`：標準輸入與輸出都連著「終端機」= 有真人在操作。
+#    排程或輸出導向檔案時不是終端機，就不能問人，改用預設值。
+parse_args "$@"
+if [[ -z "$RUN_MODE" ]]; then
+  if [[ -t 0 && -t 1 ]]; then
+    choose_run_mode
+  else
+    RUN_MODE="duration"
+    RUN_DURATION_MIN=$DEFAULT_DURATION_MIN
+    echo "（非互動環境，使用預設 ${DEFAULT_DURATION_MIN} 分鐘）"
+  fi
+fi
+
+# 1. 偵測環境 → 2. 建立 log → 3. 印橫幅與本次測試計畫
 detect_env
 init_logs
 print_banner
+print_run_plan
 
 # 🔰 `trap 指令 訊號`：註冊「收到某訊號時要執行的函式」。
 #    INT = Interrupt，也就是你按下 Ctrl+C。
 #    沒有 trap 的話，Ctrl+C 會讓程式立刻死掉，來不及出報表。
 trap finish INT
 
-# 無限迴圈：每秒做一輪，直到使用者按 Ctrl+C。
+# 主迴圈：每秒約一輪，直到「時間 / 輪數到了」或使用者按 Ctrl+C。
 count=0
+RUN_START=$(date +%s)
 while true; do
   # (a) 檢查是否剛從睡眠醒來
   check_sleep_gap_and_note
@@ -998,7 +1225,15 @@ while true; do
    show_minute_heartbeat
     LAST_HEARTBEAT=$(date +%s)
   fi
+  # (c2) 時間或輪數到了嗎？到了就跳出迴圈，進入結束流程。
+  #      🔰 `break` 立刻離開 while 迴圈。
+  if run_finished; then
+    break
+  fi
   # (d) 休息 1 秒，形成「每秒一輪」的節奏
   #     （實際週期 = ping 耗時 + 1 秒，所以會略大於 1 秒）
   sleep 1
 done
+
+# 迴圈是「自然結束」（時間 / 輪數到了），不是被 Ctrl+C 打斷 → 自動出報告。
+finish

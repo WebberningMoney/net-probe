@@ -1,6 +1,6 @@
 # 🌐 net-probe
 
-> 一支只用 macOS 內建工具寫成的「網路品質體檢」腳本：同時對 4 個網路位址測試，Ctrl+C 後給你一張成績單。
+> 一支只用 macOS 內建工具寫成的「網路品質體檢」腳本：同時對 4 個網路位址測試，時間到（或按 Ctrl+C）就給你一張成績單。
 > *A zero-dependency macOS shell script that pings 4 targets in parallel and grades your connection.*
 
 ![platform](https://img.shields.io/badge/platform-macOS-blue) ![shell](https://img.shields.io/badge/shell-bash-green) ![license](https://img.shields.io/badge/license-MIT-lightgrey)
@@ -104,8 +104,21 @@ chmod +x net_probe.sh     # 第一次需要：允許這支檔案被執行
 ./net_probe.sh
 ```
 
-讓它跑一段時間（建議至少 5 分鐘；想抓「晚間尖峰」問題就跑 1 小時以上），然後按 **`Ctrl + C`** 看報告。
-按下後請再等一下：程式會接著做 Curl 下載實測（約十幾秒到一分鐘），完成後才會出現最後的「綜合總結」。
+啟動後會先問你**要測多久**：
+
+```
+🔧 要測多久？
+  1) 5 分鐘（約 272 輪）  ← 預設
+  2) 15 分鐘
+  3) 1 小時
+  4) 自訂（輸入分鐘數或輪數）
+  5) 持續測試，按 Ctrl+C 結束
+請選擇 [1-5，直接按 Enter = 1]：
+```
+
+不確定就直接按 **Enter**（測 5 分鐘）。想抓「晚間尖峰」問題可選 1 小時以上。
+時間一到，程式會自動接著做 Curl 下載實測（約十幾秒到一分鐘），然後印出「綜合總結」。
+中途想提早看報告？隨時按 **`Ctrl + C`** 即可。
 
 ### 📂 之後再次使用
 
@@ -119,6 +132,16 @@ cd ~/Desktop/net-probe
 - **測試紀錄檔（`.log`）會存在你執行時所在的資料夾**，也就是 `~/Desktop/net-probe/`。想在 Finder 打開：在終端機輸入 `open .`。
 - **想更新到最新版**：在 `~/Desktop/net-probe` 裡執行 `git pull`。
 - **如果出現 `No such file or directory`**：代表你不在這個資料夾，先 `cd ~/Desktop/net-probe`。用 `pwd` 可以看目前位置、`ls` 可以看這裡有什麼檔案。
+
+**進階：跳過選單／其他選項**
+
+```bash
+./net_probe.sh -d 15          # 直接測 15 分鐘，不顯示選單
+./net_probe.sh -n 300         # 測 300 輪（1 輪約 1.1 秒）
+./net_probe.sh --forever      # 持續測試，按 Ctrl+C 結束
+./net_probe.sh --no-curl      # 結束時不做下載測速（較快）
+./net_probe.sh -h             # 顯示完整說明
+```
 
 **進階：自訂下載測速檔**
 

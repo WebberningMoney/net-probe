@@ -3,6 +3,22 @@
 格式參考 [Keep a Changelog](https://keepachangelog.com/)。
 
 ## [Unreleased]
+- 決定的技術軸（儀表板）：Python 3.13 + FastAPI + uvicorn（於 venv）、SQLite、SSE、原生 JS + Chart.js；詳見 docs/ARCHITECTURE.md
+
+## [4.9] - 2026-11-09
+
+### Added
+- 啟動前可選擇測試時長：互動選單（5 分鐘／15 分鐘／1 小時／自訂／持續），Enter = 5 分鐘；時間或輪數到了自動出報告
+- 命令列選項：`-d/--duration <分鐘>`、`-n/--rounds <輪數>`、`--forever`、`--no-curl`、`-h/--help`
+- 心跳行附上測試進度（百分比與剩餘時間／輪數）
+- 非互動環境（排程、導向檔案）自動使用預設 5 分鐘，不會卡在等待輸入
+
+### Changed
+- 測速網址仍可用最後一個非 `-` 開頭的參數指定（相容舊用法）
+- 睡眠被排除的秒數不計入「已測時間」，電腦睡著不會讓測試提早結束
+- 報表輸出期間再按一次 Ctrl+C 會乾淨中止（清除暫存檔）
+
+> 在 Linux 沙盒以假指令（stub）測試參數、選單（pty）、進度與停止條件；真實 Mac 驗證清單見對話／PR 說明。
 - 文件：README 快速開始補充存放位置（桌面）、再次執行方式、log 位置與相關 FAQ
 - 規劃中：本機網頁儀表板（穩健統計 + MOS、路由器 ping、告警通知、歷史趨勢圖），見 docs/ARCHITECTURE.md（提案）
 
