@@ -12,8 +12,10 @@
 <body>
 <h1>net-probe 儀表板 <small>簡易版（完整介面在 Phase 4）</small></h1>
 <p>最新一秒：<span id="ts">—</span></p>
+<p id="diag" style="padding:.6rem .9rem;background:#f3f6fa;border-radius:6px"></p>
 <table><thead><tr><th>目標</th><th>目前(ms)</th><th>平均</th><th>p50</th><th>p95</th><th>抖動</th><th>丟包%</th><th>分數</th><th>MOS</th></tr></thead>
 <tbody id="rows"></tbody></table>
+<h3>最近警示</h3><ul id="alerts"><li><small>尚無</small></li></ul>
 <script>
 let latest = {};
 const f = v => v === null || v === undefined ? "—" : v;
@@ -31,7 +33,16 @@ async function refresh(){
 const es = new EventSource("/api/stream");
 es.onmessage = e => { const d = JSON.parse(e.data); latest = d.results;
   document.getElementById("ts").textContent = new Date(d.ts*1000).toLocaleTimeString(); };
-refresh(); setInterval(refresh, 5000);
+async function side(){
+  const d = await (await fetch("/api/diagnosis")).json();
+  document.getElementById("diag").innerHTML = `<b>判讀：${d.title}</b><br><small>${d.detail}` +
+    (d.gateway_ip ? `（路由器 ${d.gateway_ip}）` : "") + `</small>`;
+  const a = await (await fetch("/api/alerts")).json();
+  document.getElementById("alerts").innerHTML = a.length ?
+    a.slice(0,10).map(x => `<li>${new Date(x.ts*1000).toLocaleTimeString()} ${x.message}</li>`).join("") :
+    "<li><small>尚無</small></li>";
+}
+refresh(); side(); setInterval(refresh, 5000); setInterval(side, 5000);
 </script>
 </body>
 </html>

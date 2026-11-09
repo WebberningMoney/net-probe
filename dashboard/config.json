@@ -1,12 +1,45 @@
 {
   "targets": [
-    {"name": "TWNIC",      "host": "101.101.101.101"},
-    {"name": "HiNet",      "host": "168.95.1.1"},
-    {"name": "Cloudflare", "host": "1.1.1.1"},
-    {"name": "GoogleDNS",  "host": "8.8.8.8"}
+    {
+      "name": "TWNIC",
+      "host": "101.101.101.101"
+    },
+    {
+      "name": "HiNet",
+      "host": "168.95.1.1"
+    },
+    {
+      "name": "Cloudflare",
+      "host": "1.1.1.1"
+    },
+    {
+      "name": "GoogleDNS",
+      "host": "8.8.8.8"
+    }
   ],
   "port": 8765,
   "interval_sec": 1.0,
   "ping_timeout_sec": 1,
-  "retention": {"raw_hours": 24, "minute_days": 90}
+  "retention": {
+    "raw_hours": 24,
+    "minute_days": 90
+  },
+  "gateway": {
+    "enabled": true,
+    "name": "路由器"
+  },
+  "alerts": {
+    "enabled": true,
+    "cooldown_sec": 300,
+    "loss_pct_1m": 10,
+    "p95_ms_1m": 150,
+    "consecutive_timeouts": 5,
+    "macos_notification": true
+  },
+  "diagnosis": {
+    "router_loss_pct": 1.0,
+    "router_p95_ms": 30,
+    "ext_loss_pct": 2.0,
+    "ext_p95_ms": 80
+  }
 }

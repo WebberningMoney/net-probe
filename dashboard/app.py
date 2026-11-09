@@ -12,14 +12,18 @@ import asyncio
 import json
 import os
 import time
+from collections import deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 
+import gateway
 import probe
 import stats
+from alerts import AlertManager
+from diagnose import diagnose
 from storage import Storage
 
 BASE = Path(__file__).resolve().parent
@@ -35,27 +39,48 @@ def load_config() -> dict:
 class Engine:
     """監測引擎：持有設定、資料庫，以及「最新一筆」結果。"""
 
-    def __init__(self, cfg: dict, storage: Storage, runner=None):
+    def __init__(self, cfg: dict, storage: Storage, runner=None, notifier=None):
         self.cfg, self.storage = cfg, storage
         self.runner = runner or probe._real_runner
         self.latest: dict = {"ts": 0, "results": {}}
         self.subscribers: set = set()      # 每個 SSE 連線一個 queue
         self._last_maint = 0
+        # 路由器（預設閘道）：每分鐘重新偵測一次，換 Wi-Fi 時會自動跟著變
+        gw = cfg.get("gateway", {})
+        self.gateway_enabled = gw.get("enabled", False)
+        self.router_name = gw.get("name", "路由器") if self.gateway_enabled else None
+        self.gateway_ip = None
+        self._last_gw_check = -10**9
+        self.windows: dict = {}            # 每個目標最近 60 筆結果（給告警用，免查資料庫）
+        self.alerts = AlertManager(cfg.get("alerts"), self.router_name, notifier)
 
     @property
     def targets(self) -> list:
-        return self.cfg["targets"]
+        base = list(self.cfg["targets"])
+        if self.gateway_enabled and self.gateway_ip:
+            base.append({"name": self.router_name, "host": self.gateway_ip})
+        return base
+
+    async def refresh_gateway(self, now: float) -> None:
+        if not self.gateway_enabled or now - self._last_gw_check < 60:
+            return
+        self._last_gw_check = now
+        self.gateway_ip = await gateway.get_gateway(self.runner)
 
     async def tick(self) -> dict:
         """做一輪：所有目標同時 ping 一次並儲存。"""
         timeout = self.cfg.get("ping_timeout_sec", 1)
+        await self.refresh_gateway(time.monotonic())
         names = [t["name"] for t in self.targets]
         rtts = await asyncio.gather(*[
             probe.ping_once(t["host"], timeout, self.runner) for t in self.targets])
         ts = int(time.time())
         results = dict(zip(names, rtts))
         self.storage.add_samples(ts, results)
-        self.latest = {"ts": ts, "results": results}
+        for n, v in results.items():
+            self.windows.setdefault(n, deque(maxlen=60)).append(v)
+        new_alerts = self.alerts.evaluate({n: list(w) for n, w in self.windows.items()}, ts)
+        self.latest = {"ts": ts, "results": results, "alerts": new_alerts}
         for q in list(self.subscribers):
             if q.qsize() < 5:              # 瀏覽器太慢就丟棄舊訊息，避免記憶體堆積
                 q.put_nowait(self.latest)
@@ -77,6 +102,9 @@ class Engine:
                 print("tick error:", e)
             await asyncio.sleep(max(0.0, interval - (time.monotonic() - started)))
 
+    def diagnosis(self, range_key: str = "5m") -> dict:
+        return diagnose(self.summary(range_key), self.router_name, self.cfg.get("diagnosis"))
+
     def summary(self, range_key: str) -> dict:
         since = int(time.time()) - RANGES[range_key]
         return {t["name"]: stats.summarize(self.storage.recent_rtts(t["name"], since))
@@ -84,10 +112,10 @@ class Engine:
 
 
 def create_app(cfg: dict | None = None, storage: Storage | None = None,
-               runner=None, autostart: bool = True) -> FastAPI:
+               runner=None, autostart: bool = True, notifier=None) -> FastAPI:
     cfg = cfg or load_config()
     storage = storage or Storage(os.environ.get("NETPROBE_DB", str(BASE / "netprobe.db")))
-    engine = Engine(cfg, storage, runner)
+    engine = Engine(cfg, storage, runner, notifier)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -117,6 +145,17 @@ def create_app(cfg: dict | None = None, storage: Storage | None = None,
         if range not in RANGES:
             raise HTTPException(400, f"range 必須是 {list(RANGES)} 其中之一")
         return {"range": range, "targets": engine.summary(range)}
+
+    @app.get("/api/diagnosis")
+    def diagnosis(range: str = "5m"):
+        if range not in RANGES:
+            raise HTTPException(400, f"range 必須是 {list(RANGES)} 其中之一")
+        return {"range": range, "router": engine.router_name,
+                "gateway_ip": engine.gateway_ip, **engine.diagnosis(range)}
+
+    @app.get("/api/alerts")
+    def alerts():
+        return list(engine.alerts.history)
 
     @app.get("/api/history")
     def history(target: str, range: str = "24h"):

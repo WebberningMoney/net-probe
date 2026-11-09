@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### Added（Phase 3：路由器 ping 與告警，尚未在真實 Mac 驗證）
+- 自動偵測預設閘道（`route -n get default`）並加入第 5 個目標「路由器」，每分鐘重新偵測（換 Wi-Fi 會跟著變）
+- `diagnose.py`：路由器 vs 外部目標的白話判讀（偏 Wi-Fi／路由器、偏 ISP 或遠端、只有單一目標不穩、正常）
+- `alerts.py`：連續逾時、近 1 分鐘丟包率、近 1 分鐘 p95 三種規則；冷卻時間；macOS 通知（osascript）
+- API：`/api/diagnosis`、`/api/alerts`；`config.json` 新增 `gateway` / `alerts` / `diagnosis`
+- 測試增至 25 個
+
 ### Added（Phase 2：儀表板核心，尚未在真實 Mac 驗證）
 - `dashboard/`：FastAPI 後端 —— 每秒並行 ping、SQLite 儲存（原始 24 小時、每分鐘彙總 90 天）、REST API（`/api/summary`、`/api/history`、`/api/latest`）、SSE 即時串流（`/api/stream`）
 - `stats.py`：p50 / p95 / p99、抖動、丟包、與 Bash 版相同的 Score，以及 MOS（E-model 簡化）
