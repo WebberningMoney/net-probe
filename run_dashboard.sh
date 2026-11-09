@@ -29,4 +29,4 @@ URL="http://127.0.0.1:$PORT"
 echo "🚀 儀表板啟動中：$URL （按 Ctrl+C 結束）"
 # 稍等伺服器就緒再開瀏覽器（macOS 的 open）
 ( sleep 2; command -v open >/dev/null 2>&1 && open "$URL" ) &
-exec .venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port "$PORT" --log-level warning
+exec .venv/bin/python serve.py

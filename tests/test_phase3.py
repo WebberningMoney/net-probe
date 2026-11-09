@@ -70,6 +70,19 @@ def test_loss_and_p95_need_enough_samples():
     assert "p95" in rules and "loss" in rules                  # 3/29 ≈ 10.3% 丟包
 
 
+def test_simultaneous_alerts_are_grouped():
+    m, sent = _mgr()
+    down = [10.0] * 5 + [None] * 6
+    a = m.evaluate({"路由器": down, "A": down, "B": down, "C": down}, 100)
+    assert len(a) == 1 and a[0]["target"] == "全部" and len(sent) == 1
+    assert "4 個目標" in sent[0] and "路由器" in sent[0]
+    # 組內每個目標都進入冷卻
+    assert m.evaluate({"路由器": down, "A": down, "B": down, "C": down}, 200) == []
+    # 只有 2 個目標 → 不合併（低於 group_min_targets=3）
+    m2, sent2 = _mgr()
+    assert len(m2.evaluate({"A": down, "B": down, "C": [10.0] * 11}, 1)) == 2
+
+
 def test_disabled():
     m, sent = _mgr(enabled=False)
     assert m.evaluate({"A": [None] * 50}, 1) == [] and sent == []

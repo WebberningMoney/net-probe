@@ -17,7 +17,7 @@ from typing import Callable, Optional
 import stats
 
 DEFAULTS = {"enabled": True, "cooldown_sec": 300, "loss_pct_1m": 10.0,
-            "p95_ms_1m": 150.0, "consecutive_timeouts": 5, "min_samples": 20,
+            "p95_ms_1m": 150.0, "consecutive_timeouts": 5, "min_samples": 20, "group_min_targets": 3,
             "macos_notification": True}
 
 
@@ -63,26 +63,42 @@ class AlertManager:
         c = self.cfg
         if not c["enabled"]:
             return []
-        fired = []
+        cands = []                            # 這一輪的候選告警：(規則, 目標, 訊息, 嚴重度)
         for name, samples in windows.items():
             who = "路由器" if name == self.router_name else name
             t = self._trailing_timeouts(samples)
             if t >= c["consecutive_timeouts"]:
                 hint = "可能是 Wi-Fi 斷線或路由器問題" if name == self.router_name else "網路可能中斷，或該目標暫時不可用"
-                self._fire(fired, ts, "timeouts", name, f"{who} 已連續 {t} 秒沒有回應（{hint}）", "critical")
+                cands.append(("timeouts", name, f"{who} 已連續 {t} 秒沒有回應（{hint}）", "critical"))
             if len(samples) >= c["min_samples"]:
                 s = stats.summarize(samples)
                 if s["loss_pct"] >= c["loss_pct_1m"]:
-                    self._fire(fired, ts, "loss", name, f"{who} 近 1 分鐘丟包率 {s['loss_pct']}%", "warning")
+                    cands.append(("loss", name, f"{who} 近 1 分鐘丟包率 {s['loss_pct']}%", "warning"))
                 if s["p95"] is not None and s["p95"] >= c["p95_ms_1m"]:
-                    self._fire(fired, ts, "p95", name, f"{who} 近 1 分鐘 p95 延遲 {s['p95']} ms", "warning")
+                    cands.append(("p95", name, f"{who} 近 1 分鐘 p95 延遲 {s['p95']} ms", "warning"))
+        # 先濾掉冷卻中的，再依規則分組
+        by_rule: dict = {}
+        for rule, name, message, severity in cands:
+            if ts - self._last.get((rule, name), -10**12) >= c["cooldown_sec"]:
+                by_rule.setdefault(rule, []).append((name, message, severity))
+        fired = []
+        for rule, items in by_rule.items():
+            for name, _, _ in items:
+                self._last[(rule, name)] = ts
+            if len(items) >= c["group_min_targets"]:
+                # 💡 多個目標「同時」出問題，幾乎一定是共同原因（本機網路/Wi-Fi），
+                #    合併成一則比跳出一排通知更好讀。
+                names = "、".join("路由器" if n == self.router_name else n for n, _, _ in items)
+                tail = {"timeouts": "同時連續逾時，本機網路可能已中斷（Wi-Fi 斷線？）",
+                        "loss": "近 1 分鐘同時丟包，多半是本機網路或 Wi-Fi 的問題",
+                        "p95": "近 1 分鐘同時出現延遲尖峰，多半是共同路徑（Wi-Fi／路由器／ISP）的問題"}[rule]
+                self._emit(fired, ts, rule, "全部", f"{len(items)} 個目標（{names}）{tail}", items[0][2])
+            else:
+                for name, message, severity in items:
+                    self._emit(fired, ts, rule, name, message, severity)
         return fired
 
-    def _fire(self, out: list, ts: int, rule: str, name: str, message: str, severity: str) -> None:
-        key = (rule, name)
-        if ts - self._last.get(key, -10**12) < self.cfg["cooldown_sec"]:
-            return                            # 冷卻中，不重複通知
-        self._last[key] = ts
+    def _emit(self, out: list, ts: int, rule: str, name: str, message: str, severity: str) -> None:
         alert = {"ts": ts, "rule": rule, "target": name, "severity": severity, "message": message}
         self.history.appendleft(alert)
         out.append(alert)

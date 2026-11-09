@@ -53,6 +53,7 @@ class Engine:
         self._last_gw_check = -10**9
         self.windows: dict = {}            # 每個目標最近 60 筆結果（給告警用，免查資料庫）
         self.alerts = AlertManager(cfg.get("alerts"), self.router_name, notifier)
+        self.loop = None                   # 伺服器的 event loop（關閉時要用）
 
     @property
     def targets(self) -> list:
@@ -60,6 +61,19 @@ class Engine:
         if self.gateway_enabled and self.gateway_ip:
             base.append({"name": self.router_name, "host": self.gateway_ip})
         return base
+
+    def stop_streams(self) -> None:
+        """通知所有 SSE 連線「該結束了」。
+
+        💡 為什麼需要？瀏覽器開著儀表板 = 一條永遠不會自己結束的串流連線；
+           uvicorn 收到 Ctrl+C 會等所有連線關閉才退出 → 看起來像「按了沒反應」。
+           所以關閉前先主動把串流收掉（放入 None 當作結束訊號）。
+        """
+        def _push():
+            for q in list(self.subscribers):
+                q.put_nowait(None)
+        if self.loop is not None:
+            self.loop.call_soon_threadsafe(_push)   # 🔰 從別的執行緒/信號處理器安全地排進 event loop
 
     async def refresh_gateway(self, now: float) -> None:
         if not self.gateway_enabled or now - self._last_gw_check < 60:
@@ -119,6 +133,7 @@ def create_app(cfg: dict | None = None, storage: Storage | None = None,
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        engine.loop = asyncio.get_running_loop()
         task = asyncio.create_task(engine.run_forever()) if autostart else None
         yield
         if task:
@@ -178,6 +193,8 @@ def create_app(cfg: dict | None = None, storage: Storage | None = None,
                 yield f"data: {json.dumps(engine.latest)}\n\n"
                 while True:
                     item = await q.get()
+                    if item is None:       # 伺服器要關閉了
+                        return
                     yield f"data: {json.dumps(item)}\n\n"
             finally:
                 engine.subscribers.discard(q)
