@@ -1,0 +1,13 @@
+# 測試產生的 ping 紀錄檔（含個人網路資訊，不要上傳）
+ping_*.log
+*.log
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# 編輯器
+.vscode/
+.idea/
+*.swp
