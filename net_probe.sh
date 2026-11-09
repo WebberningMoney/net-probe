@@ -11,7 +11,7 @@
 #
 # 📖 這份註解版的閱讀方式
 # ---------------------------------------------------------------------
-#  本檔為 v4.6：在原版 v4.5 加上完整註解，並修正 KI-1 ~ KI-8（見 CHANGELOG）。
+#  本檔為 v4.7：在原版 v4.5 加上完整註解，並修正 KI-1 ~ KI-11（見 CHANGELOG）。
 #  原版 v4.5 保留在 legacy/，可與本檔對照學習「bug 是怎麼修的」。
 #  讀的順序建議：
 #     ① 先看「整體流程」  → 知道程式在幹嘛
@@ -22,8 +22,8 @@
 #  註解符號：
 #     💡 觀念說明（為什麼這樣寫）
 #     🔰 初學者小教室（Bash / awk 語法解釋）
-#     🛠 FIXED（v4.6 已修正的問題；註解保留「原本哪裡有問題」方便對照學習）
-#        對應 README.md 的「已知問題」表格編號 KI-1 ~ KI-8
+#     🛠 FIXED（已修正的問題；註解保留「原本哪裡有問題」方便對照學習）
+#        對應 README.md 的「已知問題」表格編號 KI-1 ~ KI-11
 #
 # 🗺️ 整體流程（Big Picture）
 # ---------------------------------------------------------------------
@@ -258,19 +258,19 @@ score_web() {
 # detect_env：把偵測結果存進全域變數
 #   MAC_VER / DEFAULT_IF / IP_ADDR / IF_DESC / ISP
 detect_env() {
-  # --- 3-1 由 Darwin 核心版號推算 macOS 名稱 ---
-  # 🔰 `uname -r` 例：25.0.0；`cut -d'.' -f1` 以「.」切開取第 1 段 → 25。
-  #    `case ... esac` 是 Bash 的 switch/case；`26|25)` 表示 26 或 25 都符合。
-  # 💡 Darwin 版號與 macOS 版號不同，所以需要對照表。新版 macOS 出來時要補上。
-  local darwin_ver; darwin_ver=$(uname -r | cut -d'.' -f1)
-  case "$darwin_ver" in
-    26|25) MAC_VER="macOS 26 (Tahoe)";;
-    24)    MAC_VER="macOS 15 (Sequoia)";;
-    23)    MAC_VER="macOS 14 (Sonoma)";;
-    22)    MAC_VER="macOS 13 (Ventura)";;
-    21)    MAC_VER="macOS 12 (Monterey)";;
-    *)     MAC_VER="macOS (Darwin $darwin_ver)";;
-  esac
+  # --- 3-1 取得 macOS 版本 ---
+  # 🛠 FIXED KI-11：原版用「Darwin 核心版號 → macOS 名稱」的對照表（case），
+  #    但新版 macOS 一出來表就過期，會顯示 "macOS (Darwin 27)" 這種不友善的字。
+  #    現在直接問系統：`sw_vers -productVersion` 是 macOS 內建指令，
+  #    會回傳真正的版本號（例如 15.1），永遠不需要維護對照表。
+  # 💡 設計原則：能「向系統查詢」的資訊，就不要自己「硬編碼對照表」。
+  # 🔰 `uname -r | cut -d'.' -f1` 取 Darwin 主版號，只在 sw_vers 失敗時當備援。
+  local mac_ver_num; mac_ver_num=$(sw_vers -productVersion 2>/dev/null)
+  if [[ -n "$mac_ver_num" ]]; then
+    MAC_VER="macOS $mac_ver_num"
+  else
+    MAC_VER="macOS (Darwin $(uname -r | cut -d'.' -f1))"
+  fi
 
   # --- 3-2 找出「預設路由」走的網卡（例如 en0）---
   # 🔰 `route get default` 會輸出一堆欄位，其中含 "interface: en0"。
@@ -744,6 +744,12 @@ print_curl_summary() {
   fi
   local sc4; sc4=$(score_web "$d4" "$c4" "$s4" "$T4")
   local gr4; gr4=$(grade_text "$sc4")
+  # 🛠 FIXED KI-9：HTTP 狀態碼不是 200 就「不計分」。
+  #    原版只看 DNS/TCP/SSL/Total 的時間來打分，完全不看下載是否成功。
+  #    若伺服器回 403（拒絕），下載瞬間結束，Total 只有 0.1 秒，
+  #    公式就給出 91 分「Excellent」——一個完全失敗的測試被評為優等。
+  #    💡 觀念：評分前先確認「資料有效」，否則寧可顯示 N/A，也不要給誤導的好分數。
+  if [[ "$h4" != "200" ]]; then sc4="N/A"; gr4="❌ HTTP ${h4:-N/A}"; fi
 
   # ---- IPv6（只有偵測到可用位址才測）----
   local d6="" c6="" s6="" t6="" T6="" sp6="" h6="" rc6="" sp6_human="N/A" sc6="N/A" gr6="N/A"
@@ -764,6 +770,8 @@ print_curl_summary() {
     fi
     sc6=$(score_web "$d6" "$c6" "$s6" "$T6")
     gr6=$(grade_text "$sc6")
+    # 🛠 KI-9：同上，IPv6 的 HTTP 狀態碼不是 200 也不計分。
+    if [[ "$h6" != "200" ]]; then sc6="N/A"; gr6="❌ HTTP ${h6:-N/A}"; fi
   fi
 
   # ---- 輸出表格 ----
@@ -803,16 +811,28 @@ print_curl_summary() {
   # ---- 對比：誰較佳 ----
   # 💡 這行的格式同樣會被 print_overall 反向解析（IPv4 = 分數 / IPv6 = 分數）。
   echo "--------------------------------------------------"
-  if [[ "$ipv6_ok" == "1" ]] && is_number "$sc4" && is_number "$sc6"; then
+  # 🛠 KI-9/KI-10：比較只在「兩邊都有有效分數」時進行（沒有 IPv6 或失敗時 sc6 = N/A）。
+  if is_number "$sc4" && is_number "$sc6"; then
     if awk -v a="$sc4" -v b="$sc6" 'BEGIN{exit !(a>b)}'; then
       echo "🏁 雙協定對比（Curl）：IPv4 較佳（IPv4 = $sc4，IPv6 = $sc6）"
     elif awk -v a="$sc4" -v b="$sc6" 'BEGIN{exit !(a<b)}'; then
       echo "🏁 雙協定對比（Curl）：IPv6 較佳（IPv4 = $sc4，IPv6 = $sc6）"
     else
-      echo "🏁 雙協定對比（Curl）：表現相當（$sc4 / $sc6）"
+      echo "🏁 雙協定對比（Curl）：表現相當（IPv4 = $sc4，IPv6 = $sc6）"
     fi
+  elif is_number "$sc4"; then
+    # 🛠 FIXED KI-10：這幾行現在都「帶著分數」（IPv4 = xx）。
+    #    原版的這句沒有分數，print_overall 用 grep 解析不到，
+    #    沒有 IPv6 的使用者綜合總結會變成「Curl：N/A 較佳（Score N/A N/A）」。
+    if [[ "$ipv6_ok" == "1" ]]; then
+      echo "🏁 雙協定對比（Curl）：IPv6 測試失敗（HTTP ${h6:-N/A}），僅 IPv4 有成績（IPv4 = $sc4）"
+    else
+      echo "🏁 雙協定對比（Curl）：IPv6 未偵測到可用位址，僅 IPv4 有成績（IPv4 = $sc4）"
+    fi
+  elif is_number "$sc6"; then
+    echo "🏁 雙協定對比（Curl）：IPv4 測試失敗（HTTP ${h4:-N/A}），僅 IPv6 有成績（IPv6 = $sc6）"
   else
-    echo "🏁 雙協定對比（Curl）：IPv6 未偵測到可用位址，僅顯示 IPv4 成績"
+    echo "🏁 雙協定對比（Curl）：IPv4 / IPv6 皆未取得有效成績（HTTP ${h4:-N/A} / ${h6:-N/A}），請檢查下載網址或網路"
   fi
 }
 
@@ -866,9 +886,14 @@ print_overall() {
     if awk -v v4="$curl_v4_score" -v v6="$curl_v6_score" 'BEGIN{exit !(v4>v6)}'; then
       best_curl_ipv="IPv4"
       best_curl_score="$curl_v4_score"
-    else
+    elif awk -v v4="$curl_v4_score" -v v6="$curl_v6_score" 'BEGIN{exit !(v4<v6)}'; then
       best_curl_ipv="IPv6"
       best_curl_score="$curl_v6_score"
+    else
+      # 🛠 KI-10：分數完全相同（一位小數下並不罕見）。原版會直接當成 IPv6 較佳，
+      #    且「表現相當」那行沒帶分數，總結會解析失敗。現在如實顯示並列。
+      best_curl_ipv="IPv4（與 IPv6 並列）"
+      best_curl_score="$curl_v4_score"
     fi
   elif [[ -n "$curl_v4_score" ]]; then
     best_curl_ipv="IPv4"
@@ -887,7 +912,12 @@ print_overall() {
 
   # ---- 輸出綜合總結 ----
   echo "✅ Ping：${best_ping_domain:-Unknown} (${best_ping_ip:-N/A}) 最穩定（Score ${best_ping_score:-N/A} ${best_ping_grade:-N/A}）"
-  echo "✅ Curl：${best_curl_ipv:-IPv4} 較佳（Score ${best_curl_score:-N/A} ${best_curl_grade:-N/A}）"
+  # 🛠 KI-9：沒有任何有效 Curl 成績時，明說「失敗」，不要印「N/A 較佳」。
+  if [[ "$best_curl_score" == "N/A" ]]; then
+    echo "⚠️ Curl：沒有有效成績（下載失敗，請看上方 HTTP 狀態碼）"
+  else
+    echo "✅ Curl：${best_curl_ipv:-IPv4} 較佳（Score ${best_curl_score:-N/A} ${best_curl_grade:-N/A}）"
+  fi
   echo "--------------------------------------------------"
   echo "🏁 測試完成於 $(date '+%Y-%m-%d %H:%M:%S')"
   echo "--------------------------------------------------"
