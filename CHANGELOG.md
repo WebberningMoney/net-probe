@@ -3,6 +3,12 @@
 格式參考 [Keep a Changelog](https://keepachangelog.com/)。
 
 ## [Unreleased]
+
+### Added（Phase 2：儀表板核心，尚未在真實 Mac 驗證）
+- `dashboard/`：FastAPI 後端 —— 每秒並行 ping、SQLite 儲存（原始 24 小時、每分鐘彙總 90 天）、REST API（`/api/summary`、`/api/history`、`/api/latest`）、SSE 即時串流（`/api/stream`）
+- `stats.py`：p50 / p95 / p99、抖動、丟包、與 Bash 版相同的 Score，以及 MOS（E-model 簡化）
+- `run_dashboard.sh`：自動建立 `.venv`、安裝固定版本套件、啟動並開啟瀏覽器；只綁 127.0.0.1:8765
+- 極簡網頁（完整介面在 Phase 4）；`tests/` 共 16 個自動化測試
 - 決定的技術軸（儀表板）：Python 3.13 + FastAPI + uvicorn（於 venv）、SQLite、SSE、原生 JS + Chart.js；詳見 docs/ARCHITECTURE.md
 
 ## [4.9] - 2026-11-09

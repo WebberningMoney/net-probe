@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>net-probe 儀表板（Phase 2 簡易版）</title>
+<style>
+  body{font-family:-apple-system,"PingFang TC",sans-serif;margin:2rem;color:#222}
+  table{border-collapse:collapse} th,td{padding:.4rem .9rem;border-bottom:1px solid #ddd;text-align:right}
+  th:first-child,td:first-child{text-align:left} .bad{color:#c00} small{color:#777}
+</style>
+</head>
+<body>
+<h1>net-probe 儀表板 <small>簡易版（完整介面在 Phase 4）</small></h1>
+<p>最新一秒：<span id="ts">—</span></p>
+<table><thead><tr><th>目標</th><th>目前(ms)</th><th>平均</th><th>p50</th><th>p95</th><th>抖動</th><th>丟包%</th><th>分數</th><th>MOS</th></tr></thead>
+<tbody id="rows"></tbody></table>
+<script>
+let latest = {};
+const f = v => v === null || v === undefined ? "—" : v;
+async function refresh(){
+  const r = await (await fetch("/api/summary?range=5m")).json();
+  const body = document.getElementById("rows"); body.innerHTML = "";
+  for (const [name, s] of Object.entries(r.targets)){
+    const cur = latest[name];
+    body.insertAdjacentHTML("beforeend",
+      `<tr><td>${name}</td><td class="${cur==null?'bad':''}">${cur==null?'逾時':cur}</td>` +
+      `<td>${f(s.avg)}</td><td>${f(s.p50)}</td><td>${f(s.p95)}</td><td>${f(s.jitter)}</td>` +
+      `<td>${s.loss_pct}</td><td>${f(s.score)} ${s.grade}</td><td>${f(s.mos)}</td></tr>`);
+  }
+}
+const es = new EventSource("/api/stream");
+es.onmessage = e => { const d = JSON.parse(e.data); latest = d.results;
+  document.getElementById("ts").textContent = new Date(d.ts*1000).toLocaleTimeString(); };
+refresh(); setInterval(refresh, 5000);
+</script>
+</body>
+</html>

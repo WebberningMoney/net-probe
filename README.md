@@ -133,6 +133,15 @@ cd ~/Desktop/net-probe
 - **想更新到最新版**：在 `~/Desktop/net-probe` 裡執行 `git pull`。
 - **如果出現 `No such file or directory`**：代表你不在這個資料夾，先 `cd ~/Desktop/net-probe`。用 `pwd` 可以看目前位置、`ls` 可以看這裡有什麼檔案。
 
+**🆕 本機網頁儀表板（開發中，Phase 2 簡易版）**
+
+```bash
+./run_dashboard.sh     # 第一次會自動建立專屬 .venv 並安裝套件，之後直接啟動
+```
+
+會在你的 Mac 上開啟 `http://127.0.0.1:8765`（只有你自己的電腦連得到，不上雲端）。按 `Ctrl + C` 結束。
+目標清單改 `dashboard/config.json`。完整圖表介面、路由器 ping、告警通知會在後續階段加入。
+
 **進階：跳過選單／其他選項**
 
 ```bash

@@ -1,0 +1,12 @@
+{
+  "targets": [
+    {"name": "TWNIC",      "host": "101.101.101.101"},
+    {"name": "HiNet",      "host": "168.95.1.1"},
+    {"name": "Cloudflare", "host": "1.1.1.1"},
+    {"name": "GoogleDNS",  "host": "8.8.8.8"}
+  ],
+  "port": 8765,
+  "interval_sec": 1.0,
+  "ping_timeout_sec": 1,
+  "retention": {"raw_hours": 24, "minute_days": 90}
+}

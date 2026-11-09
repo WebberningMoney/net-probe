@@ -11,3 +11,9 @@ ping_*.log
 .vscode/
 .idea/
 *.swp
+
+# 儀表板
+dashboard/.venv/
+dashboard/*.db
+__pycache__/
+.pytest_cache/
