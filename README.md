@@ -332,7 +332,8 @@ net-probe/
 ├── CHANGELOG.md        ← 版本紀錄
 ├── .gitignore          ← 避免把 .log 測試紀錄傳上 GitHub
 ├── docs/
-│   └── RESOURCES.md    ← 相關開源專案、API 與擴充參考資源
+│   ├── RESOURCES.md    ← 相關開源專案、API 與擴充參考資源
+│   └── ARCHITECTURE.md ← 本機網頁儀表板的架構與技術選型（提案，尚未實作）
 └── legacy/
     └── ping_quad_monitor_mac_color_final_v4.5.sh   ← 原始未註解版（保留備查）
 ```
