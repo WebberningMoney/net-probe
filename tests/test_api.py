@@ -50,4 +50,4 @@ def test_bad_range_and_unknown_target(client):
 def test_index_page_served(client):
     c, _ = client
     r = c.get("/")
-    assert r.status_code == 200 and "net-probe" in r.text
+    assert r.status_code == 200 and "NetSonar" in r.text

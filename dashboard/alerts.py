@@ -103,4 +103,4 @@ class AlertManager:
         self.history.appendleft(alert)
         out.append(alert)
         if self.notifier:
-            self.notifier("net-probe 網路警示", message)
+            self.notifier("NetSonar 網路警示", message)

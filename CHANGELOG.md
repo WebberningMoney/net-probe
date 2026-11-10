@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### Phase 4 網頁介面（NetSonar）
+- 全新介面：五張目標卡、延遲走勢圖（5 分鐘／1 小時／24 小時／7 天，含事件標記）、網路環境面板（SSID／對外 IP 預設遮蔽）、歷史頁與 CSV 匯出、路徑分析頁、VPN 提示
+- 改名 NetSonar，新增圖示（聲納弧線）；通知標題改為「NetSonar 網路警示」
+- 尚未完成：定時測試頁與報告、Curl 下載測試
+
 ### Phase 4 後端（NetSonar）
 - 修正：開 VPN 時路由器偵測抓到 VPN 通道的問題；改讀 `netstat -rn -f inet`，挑出實體介面的預設閘道，並偵測 VPN 狀態
 - 新增 `netenv.py`：連線類型、本機 IP、DNS、Proxy、MTU、IPv6、VPN、Wi-Fi 頻道/訊號/速率；網路變更事件

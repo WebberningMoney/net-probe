@@ -2,48 +2,186 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>net-probe 儀表板（Phase 2 簡易版）</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NetSonar 網路聲納</title>
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
 <style>
-  body{font-family:-apple-system,"PingFang TC",sans-serif;margin:2rem;color:#222}
-  table{border-collapse:collapse} th,td{padding:.4rem .9rem;border-bottom:1px solid #ddd;text-align:right}
-  th:first-child,td:first-child{text-align:left} .bad{color:#c00} small{color:#777}
+:root{--bg:#f5f7fa;--card:#fff;--ink:#16202e;--mute:#6b7788;--line:#e3e8ef;--ok:#16a34a;--warn:#d97706;--bad:#dc2626;--acc:#0891b2}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:14px -apple-system,"PingFang TC",sans-serif}
+header{display:flex;align-items:center;gap:12px;padding:12px 24px;background:#0b1b33;color:#fff}
+header img{width:32px;height:32px} header b{font-size:18px} header small{color:#9fb3cc}
+nav{margin-left:auto;display:flex;gap:4px} nav button{background:none;border:0;color:#9fb3cc;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:14px}
+nav button.on{background:#17305a;color:#fff}
+main{max-width:1180px;margin:0 auto;padding:18px 24px 48px} section{display:none} section.on{display:block}
+.banner{padding:10px 14px;border-radius:8px;margin-bottom:12px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412}
+.diag{padding:12px 16px;border-radius:10px;background:var(--card);border:1px solid var(--line);margin-bottom:14px;border-left:5px solid var(--mute)}
+.diag.ok{border-left-color:var(--ok)}.diag.local,.diag.upstream,.diag.target{border-left-color:var(--warn)}
+.diag small{color:var(--mute)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;border-top:4px solid var(--mute)}
+.card.Excellent,.card.Good{border-top-color:var(--ok)}.card.Moderate{border-top-color:var(--warn)}.card.Poor{border-top-color:var(--bad)}
+.card h4{margin:0 0 4px;font-size:13px;color:var(--mute);display:flex;justify-content:space-between}
+.card .big{font-size:30px;font-weight:600}.card .big.to{color:var(--bad)} .card .big small{font-size:13px;color:var(--mute);font-weight:400}
+.card dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:8px 0 0;color:var(--mute);font-size:12px} .card dd{margin:0;text-align:right;color:var(--ink)}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+.panel h3{margin:0 0 10px;font-size:15px} .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.row button,.btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:5px 11px;cursor:pointer;font-size:13px}
+.row button.on,.btn.pri{background:var(--acc);color:#fff;border-color:var(--acc)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--mute);margin-top:6px}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px}
+svg.chart{width:100%;height:260px;display:block} .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
+table{border-collapse:collapse;width:100%} td,th{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left;font-size:13px} th{color:var(--mute);font-weight:500}
+td.k{color:var(--mute);width:38%} .mask{cursor:pointer;color:var(--acc);margin-left:8px;font-size:12px}
+ul.list{margin:0;padding-left:18px} ul.list li{margin:3px 0} small.m{color:var(--mute)} .hint{color:var(--mute);font-size:12px}
+input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:14px;width:240px}
+.hop.high td{background:#fef2f2}.hop.none td{color:var(--mute)}
 </style>
 </head>
 <body>
-<h1>net-probe 儀表板 <small>簡易版（完整介面在 Phase 4）</small></h1>
-<p>最新一秒：<span id="ts">—</span></p>
-<p id="diag" style="padding:.6rem .9rem;background:#f3f6fa;border-radius:6px"></p>
-<table><thead><tr><th>目標</th><th title="最近一秒的延遲（毫秒）；逾時代表沒收到回應" style="cursor:help">目前(ms)</th><th title="過去 5 分鐘的平均延遲（毫秒）" style="cursor:help">平均</th><th title="中位數：一半的樣本比它快，不受偶爾尖峰影響" style="cursor:help">p50</th><th title="95% 的樣本都比它快；愈大代表偶爾的尖峰愈明顯" style="cursor:help">p95</th><th title="連續兩次延遲的平均差距；愈大代表愈不穩定" style="cursor:help">抖動</th><th title="沒收到回應的比例" style="cursor:help">丟包%</th><th title="與 Bash 版相同的 Ping 分數（100 − 丟包×2 − 平均÷2 − 抖動×1.5）" style="cursor:help">分數</th><th title="通話品質分（1–4.5）：4.3+極佳、4.0+良好、3.6+尚可、3.1以下很差。看延遲、抖動、丟包，對偶爾的尖峰較寬容" style="cursor:help">MOS</th></tr></thead>
-<tbody id="rows"></tbody></table>
-<p><small>💡 MOS＝通話品質分（滿分約 4.4）：4.3 以上極佳｜4.0–4.3 良好｜3.6–4.0 尚可｜3.1 以下很差。滑鼠移到表頭可看各欄位說明。</small></p>
-<h3>最近警示</h3><ul id="alerts"><li><small>尚無</small></li></ul>
+<header><img src="/icon.svg" alt=""><div><b>NetSonar</b> <small>網路聲納</small></div>
+<nav><button data-t="live" class="on">即時</button><button data-t="hist">歷史</button><button data-t="trace">路徑分析</button></nav></header>
+<main>
+<section id="live" class="on">
+  <div id="vpnbar"></div>
+  <div id="diag" class="diag"></div>
+  <div id="cards" class="cards"></div>
+  <div class="panel"><h3>延遲走勢（毫秒，愈低愈好）</h3>
+    <div class="row" id="ranges"></div><svg id="chart" class="chart"></svg><div id="legend" class="legend"></div>
+    <div class="hint">灰色虛線＝網路環境變化（VPN 開關、換 Wi-Fi 頻道等）。1 小時以內為平均值，24 小時以上為每分鐘平均。</div></div>
+  <div class="grid">
+    <div class="panel"><h3>網路環境</h3><table id="env"></table></div>
+    <div class="panel"><h3>最近警示與事件</h3><ul class="list" id="alerts"></ul></div>
+  </div>
+</section>
+<section id="hist">
+  <div class="panel"><h3>歷史趨勢與匯出</h3>
+    <div class="row" id="hranges"></div><div class="row" id="hsel"></div>
+    <svg id="hchart" class="chart"></svg><div class="hint" id="hnote"></div>
+    <div class="row"><a class="btn" id="csv" href="#">下載 CSV（原始資料，最多保留 24 小時）</a></div></div>
+</section>
+<section id="trace">
+  <div class="panel"><h3>路徑分析（Traceroute）</h3>
+    <div class="row"><input type="text" id="thost" value="1.1.1.1" aria-label="目標"><button class="btn pri" id="tgo">開始分析</button><span class="hint" id="tstat"></span></div>
+    <div id="tres"></div>
+    <div class="hint">一站一站看延遲。「—」代表該節點不回應（很常見，不代表有問題）；要注意的是延遲從某一跳開始升高、之後都維持高檔。</div></div>
+</section>
+</main>
 <script>
-let latest = {};
-const f = v => v === null || v === undefined ? "—" : v;
-async function refresh(){
-  const r = await (await fetch("/api/summary?range=5m")).json();
-  const body = document.getElementById("rows"); body.innerHTML = "";
-  for (const [name, s] of Object.entries(r.targets)){
-    const cur = latest[name];
-    body.insertAdjacentHTML("beforeend",
-      `<tr><td>${name}</td><td class="${cur==null?'bad':''}">${cur==null?'逾時':cur}</td>` +
-      `<td>${f(s.avg)}</td><td>${f(s.p50)}</td><td>${f(s.p95)}</td><td>${f(s.jitter)}</td>` +
-      `<td>${s.loss_pct}</td><td>${f(s.score)} ${s.grade}</td><td>${f(s.mos)}</td></tr>`);
-  }
+const $=s=>document.querySelector(s), COL=["#0891b2","#7c3aed","#ea580c","#16a34a","#db2777","#64748b"];
+const RN={"5m":"5 分鐘","1h":"1 小時","24h":"24 小時","7d":"7 天"}, esc=s=>String(s??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const J=async u=>{const r=await fetch(u);if(!r.ok)throw new Error(r.status);return r.json()};
+const fmt=v=>v==null?"—":(+v).toFixed(v>=100?0:1), tm=t=>new Date(t*1000).toLocaleTimeString("zh-TW",{hour12:false});
+const mosTip="MOS＝通話品質分（1–4.5）：4.3+極佳、4.0+良好、3.6+尚可、3.1 以下很差";
+let latest={}, range="5m", hrange="1h", htarget=null, targets=[], shown={};
+
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("nav button,section").forEach(e=>e.classList.remove("on"));
+  b.classList.add("on");$("#"+b.dataset.t).classList.add("on");
+  if(b.dataset.t==="hist")drawHist();});
+
+function ranges(el,cur,set){el.innerHTML=Object.keys(RN).map(k=>`<button class="${k===cur?'on':''}" data-k="${k}">${RN[k]}</button>`).join("");
+  el.querySelectorAll("button").forEach(b=>b.onclick=()=>set(b.dataset.k));}
+
+/* ---------- 折線圖（自繪 SVG，不依賴外部函式庫） ---------- */
+function plot(svg,series,events){
+  const W=1000,H=260,L=46,R=10,T=10,B=24; let all=[];
+  series.forEach(s=>s.pts.forEach(p=>p.v!=null&&all.push(p)));
+  if(!all.length){svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.innerHTML=`<text x="${W/2}" y="${H/2}" text-anchor="middle" fill="#6b7788">資料收集中…</text>`;return;}
+  const t0=Math.min(...all.map(p=>p.t)),t1=Math.max(...all.map(p=>p.t),t0+1);
+  const vs=all.map(p=>p.v).sort((a,b)=>a-b), vmax=Math.max(20,vs[Math.floor(vs.length*.995)]*1.1);
+  const X=t=>L+(t-t0)/(t1-t0)*(W-L-R), Y=v=>T+(1-Math.min(v,vmax)/vmax)*(H-T-B);
+  let o=`<rect x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}" fill="#fafbfc"/>`;
+  for(let i=0;i<=4;i++){const v=vmax*i/4,y=Y(v);o+=`<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="#e3e8ef"/><text x="${L-6}" y="${y+4}" text-anchor="end" font-size="11" fill="#6b7788">${Math.round(v)}</text>`;}
+  for(let i=0;i<=4;i++){const t=t0+(t1-t0)*i/4;o+=`<text x="${X(t)}" y="${H-6}" text-anchor="middle" font-size="11" fill="#6b7788">${new Date(t*1000).toLocaleTimeString("zh-TW",(t1-t0<3600?{hour12:false,hour:"2-digit",minute:"2-digit",second:"2-digit"}:{hour12:false,hour:"2-digit",minute:"2-digit"}))}</text>`;}
+  (events||[]).filter(e=>e.ts>=t0&&e.ts<=t1).forEach(e=>{o+=`<line x1="${X(e.ts)}" x2="${X(e.ts)}" y1="${T}" y2="${H-B}" stroke="#94a3b8" stroke-dasharray="4 3"><title>${esc(tm(e.ts)+" "+e.text)}</title></line>`;});
+  series.forEach(s=>{let d="",gap=true;s.pts.forEach(p=>{if(p.v==null){gap=true;return;}d+=(gap?"M":"L")+X(p.t).toFixed(1)+" "+Y(p.v).toFixed(1);gap=false;});
+    o+=`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="1.6"/>`;
+    s.pts.forEach(p=>{if(p.loss>0)o+=`<circle cx="${X(p.t)}" cy="${H-B-3}" r="2.5" fill="#dc2626"><title>${tm(p.t)} 丟包 ${p.loss}%</title></circle>`;});});
+  svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.innerHTML=o;
 }
-const es = new EventSource("/api/stream");
-es.onmessage = e => { const d = JSON.parse(e.data); latest = d.results;
-  document.getElementById("ts").textContent = new Date(d.ts*1000).toLocaleTimeString(); };
+async function seriesFor(name,r){
+  const d=await J(`/api/series?target=${encodeURIComponent(name)}&range=${r}`);
+  return d.points.map(p=>p.minute!==undefined?{t:p.minute,v:p.avg,loss:p.count?+(p.lost/p.count*100).toFixed(1):0}:{t:p.ts,v:p.avg,loss:p.loss_pct});
+}
+async function drawLive(){
+  const names=targets.map(t=>t.name).filter(n=>shown[n]!==false);
+  const [ev,...ss]=await Promise.all([J("/api/events"),...names.map(n=>seriesFor(n,range))]);
+  plot($("#chart"),names.map((n,i)=>({pts:ss[i],color:COL[targets.findIndex(t=>t.name===n)%COL.length]})),ev);
+  $("#legend").innerHTML=targets.map((t,i)=>`<label style="cursor:pointer"><input type="checkbox" data-n="${esc(t.name)}" ${shown[t.name]!==false?"checked":""}> <i style="background:${COL[i%COL.length]}"></i>${esc(t.name)}</label>`).join("")+`<span><i style="background:#dc2626;border-radius:50%"></i>有丟包</span>`;
+  $("#legend").querySelectorAll("input").forEach(c=>c.onchange=()=>{shown[c.dataset.n]=c.checked;drawLive();});
+}
+async function drawHist(){
+  ranges($("#hranges"),hrange,k=>{hrange=k;drawHist();});
+  $("#hsel").innerHTML=targets.map(t=>`<button class="${t.name===htarget?'on':''}" data-n="${esc(t.name)}">${esc(t.name)}</button>`).join("");
+  $("#hsel").querySelectorAll("button").forEach(b=>b.onclick=()=>{htarget=b.dataset.n;drawHist();});
+  if(!htarget)return;
+  const [s,ev]=await Promise.all([seriesFor(htarget,hrange),J("/api/events")]);
+  plot($("#hchart"),[{pts:s,color:COL[0]}],ev);
+  $("#hnote").textContent=hrange==="7d"||hrange==="24h"?"此範圍使用「每分鐘平均」，所以短暫尖峰會被平均掉；要看尖峰請用 1 小時以內。":"";
+  $("#csv").href=`/api/export.csv?target=${encodeURIComponent(htarget)}&range=${hrange==="7d"?"24h":hrange}`;
+}
+
+/* ---------- 即時：卡片 / 判讀 / 環境 ---------- */
+function cards(sum){
+  $("#cards").innerHTML=targets.map(t=>{const s=sum[t.name]||{},cur=latest[t.name],to=cur===null;
+    return `<div class="card ${s.grade||""}"><h4><span>${esc(t.name)}</span><span title="${mosTip}">MOS ${fmt(s.mos)}</span></h4>
+    <div class="big ${to?"to":""}">${cur===undefined?"—":to?"逾時":fmt(cur)}<small> ${cur>=0&&cur!==null?"ms":""}</small></div>
+    <dl><dt>平均 / p95</dt><dd>${fmt(s.avg)} / ${fmt(s.p95)}</dd><dt>抖動</dt><dd>${fmt(s.jitter)}</dd><dt>丟包</dt><dd>${s.loss_pct??"—"}%</dd><dt>分數</dt><dd>${fmt(s.score)} ${s.grade||""}</dd></dl></div>`;}).join("");
+}
+const priv={ssid:true,ip:true};
+function maskable(key,text){return priv[key]?`${"•".repeat(8)}<span class="mask" onclick="priv['${key}']=false;side()">顯示</span>`:`${esc(text)}<span class="mask" onclick="priv['${key}']=true;side()">隱藏</span>`;}
 async function side(){
-  const d = await (await fetch("/api/diagnosis")).json();
-  document.getElementById("diag").innerHTML = `<b>判讀：${d.title}</b><br><small>${d.detail}` +
-    (d.gateway_ip ? `（路由器 ${d.gateway_ip}）` : "") + `</small>`;
-  const a = await (await fetch("/api/alerts")).json();
-  document.getElementById("alerts").innerHTML = a.length ?
-    a.slice(0,10).map(x => `<li>${new Date(x.ts*1000).toLocaleTimeString()} ${x.message}</li>`).join("") :
-    "<li><small>尚無</small></li>";
+  try{
+    const [d,sum,e,al,ev]=await Promise.all([J("/api/diagnosis"),J("/api/summary?range=5m"),J("/api/env"),J("/api/alerts"),J("/api/events")]);
+    $("#diag").className="diag "+(d.code||"");
+    $("#diag").innerHTML=`<b>判讀：${esc(d.title)}</b><br><small>${esc(d.detail)}${d.gateway_ip?`（路由器 ${esc(d.gateway_ip)}）`:""}</small>`;
+    cards(sum.targets);
+    const v=e.env.vpn||{};
+    $("#vpnbar").innerHTML=v.active?`<div class="banner">🔒 VPN 開啟中（${esc(v.interface)}）：所有延遲都包含「繞到 VPN 伺服器」的距離，分數會偏低；路由器那一列才是你家到路由器的真實狀況。</div>`:"";
+    const w=e.wifi, en=e.env, pub=e.public;
+    const R=(k,val)=>`<tr><td class="k">${k}</td><td>${val}</td></tr>`;
+    let h=R("連線",esc(en.interface_type||"—")+(en.interface?` (${esc(en.interface)})`:""))+R("路由器",esc(en.gateway||"—"))+R("本機 IP",esc(en.local_ip||"—"))+R("MTU",en.mtu||"—");
+    h+=R("VPN",v.active?`開啟（${esc(v.interface)}）`:"未開啟");
+    h+=R("DNS",(en.dns||[]).map(x=>esc(x)+(x.startsWith("100.64.")||x.startsWith("10.")&&v.active?" <small class='m'>(VPN)</small>":"")).join("<br>")||"—");
+    h+=R("Proxy",(en.proxy||[]).join("、")||"無")+R("IPv6",en.ipv6?"可用":(en.ipv6_via_vpn_only?"不可用（VPN 期間通常會停用）":"不可用"));
+    if(w){h+=R("Wi-Fi",`${esc(w.phy||"")} ・ ${esc(w.band||"")} 頻道 ${w.channel??"—"}（${esc(w.width||"")}）`)+
+      R("訊號",`${w.signal_dbm} dBm（${esc(w.signal_label)}）／雜訊 ${w.noise_dbm} dBm／SNR ${w.snr_db} dB`)+R("傳輸速率",`${w.tx_rate_mbps} Mbps`)+
+      R("網路名稱",w.ssid?maskable("ssid",w.ssid):"系統未提供（macOS 隱私限制）");}
+    h+=R("對外 IP",pub&&pub.ip?maskable("ip",pub.ip)+(v.active?"<br><small class='m'>這是 VPN 出口，不是你的 ISP</small>":""):"未查詢");
+    if(pub&&pub.org)h+=R(v.active?"出口業者":"ISP",esc(pub.org));
+    $("#env").innerHTML=h;
+    const items=[...al.map(a=>({ts:a.ts,t:"⚠️ "+a.message})),...ev.map(x=>({ts:x.ts,t:"🔄 "+x.text}))].sort((a,b)=>b.ts-a.ts).slice(0,12);
+    $("#alerts").innerHTML=items.length?items.map(x=>`<li>${tm(x.ts)} ${esc(x.t)}</li>`).join(""):"<li><small class='m'>尚無</small></li>";
+  }catch(e){}
 }
-refresh(); side(); setInterval(refresh, 5000); setInterval(side, 5000);
+
+/* ---------- 路徑分析 ---------- */
+$("#tgo").onclick=async()=>{
+  $("#tres").innerHTML="";$("#tstat").textContent="啟動中…";
+  const r=await fetch("/api/traceroute",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({target:$("#thost").value.trim()})});
+  if(!r.ok){$("#tstat").textContent=(await r.json()).detail||"失敗";return;}
+  const {id}=await r.json();
+  for(;;){const j=await J("/api/traceroute/"+id);renderTrace(j);if(!j.running)break;await new Promise(r=>setTimeout(r,1000));}
+};
+function renderTrace(j){
+  $("#tstat").textContent=j.running?"分析中…（約 10–30 秒）":"完成";
+  const st=(j.analysis&&j.analysis.status)||{};
+  let h=`<table><tr><th>跳</th><th>位址</th><th>平均 ms</th><th>最高 ms</th><th>丟包</th></tr>`+
+    j.hops.map(p=>`<tr class="hop ${st[p.hop]||""}"><td>${p.hop}</td><td>${esc(p.ip||"—")}</td><td>${fmt(p.avg)}</td><td>${fmt(p.max)}</td><td>${p.loss_pct}%</td></tr>`).join("")+`</table>`;
+  if(j.analysis)h=`<div class="diag"><b>${esc(j.analysis.title)}</b><br><small>${esc(j.analysis.detail)}</small></div>`+h;
+  $("#tres").innerHTML=h;
+}
+
+/* ---------- 啟動 ---------- */
+(async()=>{
+  targets=await J("/api/targets");htarget=targets[0]&&targets[0].name;
+  ranges($("#ranges"),range,k=>{range=k;ranges($("#ranges"),range,()=>{});drawLive();});
+  const bind=()=>ranges($("#ranges"),range,k=>{range=k;bind();drawLive();});bind();
+  new EventSource("/api/stream").onmessage=e=>{latest=JSON.parse(e.data).results||{};};
+  const reload=async()=>{targets=await J("/api/targets");};
+  await side();drawLive();
+  setInterval(async()=>{await reload();side();},3000);
+  setInterval(drawLive,5000);
+})();
 </script>
 </body>
 </html>

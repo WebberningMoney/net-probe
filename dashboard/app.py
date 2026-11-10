@@ -213,7 +213,7 @@ def create_app(cfg: dict | None = None, storage: Storage | None = None,
             task.cancel()
         storage.close()
 
-    app = FastAPI(title="net-probe dashboard", lifespan=lifespan)
+    app = FastAPI(title="NetSonar", lifespan=lifespan)
     app.state.engine = engine
 
     @app.get("/api/health")
@@ -328,6 +328,10 @@ def create_app(cfg: dict | None = None, storage: Storage | None = None,
 
         return StreamingResponse(gen(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache"})
+
+    @app.get("/icon.svg")
+    def icon():
+        return FileResponse(BASE / "web" / "icon.svg", media_type="image/svg+xml")
 
     @app.get("/")
     def index():
