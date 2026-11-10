@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### Phase 4 後端（NetSonar）
+- 修正：開 VPN 時路由器偵測抓到 VPN 通道的問題；改讀 `netstat -rn -f inet`，挑出實體介面的預設閘道，並偵測 VPN 狀態
+- 新增 `netenv.py`：連線類型、本機 IP、DNS、Proxy、MTU、IPv6、VPN、Wi-Fi 頻道/訊號/速率；網路變更事件
+- 新增 `traceroute.py`：路徑分析（輸入驗證、逐跳解析、持續升高 vs 單點偏高判斷、VPN 提醒）
+- 新增 API：`/api/env`、`/api/events`、`/api/series`、`/api/export.csv`、`POST /api/traceroute`
+- 設定 `public_ip_lookup`（預設開）可關閉對外 IP/ISP 查詢
+
+
 ### Added（Phase 3：路由器 ping 與告警，尚未在真實 Mac 驗證）
 - 自動偵測預設閘道（`route -n get default`）並加入第 5 個目標「路由器」，每分鐘重新偵測（換 Wi-Fi 會跟著變）
 - `diagnose.py`：路由器 vs 外部目標的白話判讀（偏 Wi-Fi／路由器、偏 ISP 或遠端、只有單一目標不穩、正常）

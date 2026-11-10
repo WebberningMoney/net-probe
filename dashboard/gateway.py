@@ -1,27 +1,53 @@
-"""gateway.py —— 找出「預設閘道」（通常就是你家的路由器）的 IP。
+"""gateway.py —— 找出「實體路由器」的 IP（開 VPN 時也不會抓錯）。
 
-💡 為什麼要 ping 路由器？它是你和網際網路之間的第一站：
-   • 路由器自己就有尖峰 → 問題在你這一端（Wi-Fi 訊號、路由器）
-   • 路由器正常、外部目標才有尖峰 → 問題在路由器之後（ISP 或遠端）
-macOS 指令：`route -n get default`，輸出中有一行 `gateway: 192.168.0.1`。
+💡 為什麼不能只用 `route -n get default`？
+   開 VPN 時，系統有「兩條」預設路由（作者的 Mac 實測，NordVPN 開啟時）：
+       default  10.5.0.2     UGScg    utun6   ← VPN 通道
+       default  192.168.0.1  UGScIg   en0     ← 真正的路由器（I = 限定在此介面）
+   `route -n get default` 只會回報第一條（VPN），把它當路由器會量到 VPN 的延遲，
+   而且 10.5.0.2 其實是「通道在你這端的 IP」，ping 它只會得到 0.1 ms，毫無意義。
+   所以改讀 `netstat -rn -f inet`，挑出「不是 VPN 介面」的那一條。
 """
 from __future__ import annotations
 
 import re
 from typing import Optional
 
-_GW_RE = re.compile(r"^\s*gateway:\s*(\S+)\s*$", re.MULTILINE)
+VPN_PREFIXES = ("utun", "ppp", "ipsec", "tun", "tap")   # 這些介面名稱 = 通道/VPN
+_IPV4 = re.compile(r"^\d+\.\d+\.\d+\.\d+$")
 
 
-def parse_route_output(text: str) -> Optional[str]:
-    m = _GW_RE.search(text)
-    return m.group(1) if m else None
+def is_vpn_iface(name: str) -> bool:
+    return name.startswith(VPN_PREFIXES)
+
+
+def parse_default_routes(text: str) -> list:
+    """從 `netstat -rn -f inet` 的輸出取出所有 default 路由：[{gateway, iface, flags}]。"""
+    routes = []
+    for line in text.splitlines():
+        parts = line.split()
+        # 欄位：Destination Gateway Flags Netif [Expire]
+        if len(parts) >= 4 and parts[0] == "default" and _IPV4.match(parts[1]):
+            routes.append({"gateway": parts[1], "flags": parts[2], "iface": parts[3]})
+    return routes
+
+
+def pick_gateways(routes: list) -> dict:
+    """分出「實體路由器」與「VPN 通道」。沒有就是 None。"""
+    physical = next((r for r in routes if not is_vpn_iface(r["iface"])), None)
+    vpn = next((r for r in routes if is_vpn_iface(r["iface"])), None)
+    return {"physical": physical, "vpn": vpn}
+
+
+async def get_gateways(runner) -> dict:
+    try:
+        code, out = await runner(["netstat", "-rn", "-f", "inet"])
+    except OSError:
+        return {"physical": None, "vpn": None}
+    return pick_gateways(parse_default_routes(out)) if code == 0 else {"physical": None, "vpn": None}
 
 
 async def get_gateway(runner) -> Optional[str]:
-    """回傳閘道 IP；沒網路（沒有預設路由）或指令失敗回傳 None。"""
-    try:
-        code, out = await runner(["route", "-n", "get", "default"])
-    except OSError:
-        return None
-    return parse_route_output(out) if code == 0 else None
+    """相容舊介面：回傳實體路由器 IP。"""
+    g = await get_gateways(runner)
+    return g["physical"]["gateway"] if g["physical"] else None

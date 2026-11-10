@@ -17,9 +17,11 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 
 import gateway
+import netenv
+import traceroute as trace_mod
 import probe
 import stats
 from alerts import AlertManager
@@ -54,6 +56,18 @@ class Engine:
         self.windows: dict = {}            # 每個目標最近 60 筆結果（給告警用，免查資料庫）
         self.alerts = AlertManager(cfg.get("alerts"), self.router_name, notifier)
         self.loop = None                   # 伺服器的 event loop（關閉時要用）
+        # 網路環境（連線類型、VPN、Wi-Fi…）與「環境變更事件」
+        self.env: dict = {}
+        self.wifi: dict | None = None
+        self.public: dict | None = None    # 對外 IP/ISP（預設遮蔽顯示，由網頁決定）
+        self.events: deque = deque(maxlen=200)
+        self._fp = None
+        self._last_env_check = -10**9
+        self._last_wifi_check = -10**9
+        self._wifi_busy = False
+        self.public_lookup = cfg.get("public_ip_lookup", True)
+        self.trace_lines = None            # 測試時可注入假的 traceroute 輸出
+        self.trace_jobs: dict = {}         # job_id → 路徑分析進度
 
     @property
     def targets(self) -> list:
@@ -81,10 +95,54 @@ class Engine:
         self._last_gw_check = now
         self.gateway_ip = await gateway.get_gateway(self.runner)
 
+    async def refresh_env(self, now: float) -> None:
+        """每 15 秒更新一次網路環境；Wi-Fi 資訊較慢（約 7 秒），丟到背景每 60 秒更新。"""
+        if now - self._last_env_check >= 15:
+            self._last_env_check = now
+            try:
+                self.env = await netenv.collect_env(self.runner)
+            except Exception as e:
+                print("env error:", e)
+                return
+            if self.env.get("gateway") and self.gateway_enabled:
+                self.gateway_ip = self.env["gateway"]      # 與路由器目標保持一致
+            self._check_change()
+        if now - self._last_wifi_check >= 60 and not self._wifi_busy:
+            self._last_wifi_check = now
+            self._wifi_busy = True
+            asyncio.create_task(self._refresh_wifi())
+
+    async def _refresh_wifi(self) -> None:
+        try:
+            self.wifi = await asyncio.wait_for(netenv.collect_wifi(self.runner), 15)
+        except Exception:
+            self.wifi = None
+        finally:
+            self._wifi_busy = False
+        self._check_change()
+
+    def _check_change(self) -> None:
+        if not self.env:
+            return
+        fp = netenv.fingerprint(self.env, self.wifi)
+        for text in netenv.describe_changes(self._fp, fp):
+            self.events.append({"ts": int(time.time()), "text": text})
+        if self._fp is not None and (self._fp["gateway"], self._fp["vpn"]) != (fp["gateway"], fp["vpn"]):
+            self.public = None                             # 網路換了，舊的對外 IP 作廢
+        self._fp = fp
+        if self.public is None and self.public_lookup and self.env.get("interface"):
+            self.public = {}                               # 佔位，避免重複查詢
+            if self.loop:
+                asyncio.create_task(self._lookup_public())
+
+    async def _lookup_public(self) -> None:
+        self.public = await asyncio.to_thread(netenv.lookup_public) or {}
+
     async def tick(self) -> dict:
         """做一輪：所有目標同時 ping 一次並儲存。"""
         timeout = self.cfg.get("ping_timeout_sec", 1)
         await self.refresh_gateway(time.monotonic())
+        await self.refresh_env(time.monotonic())
         names = [t["name"] for t in self.targets]
         rtts = await asyncio.gather(*[
             probe.ping_once(t["host"], timeout, self.runner) for t in self.targets])
@@ -123,6 +181,21 @@ class Engine:
         since = int(time.time()) - RANGES[range_key]
         return {t["name"]: stats.summarize(self.storage.recent_rtts(t["name"], since))
                 for t in self.targets}
+
+
+async def _run_trace(engine: Engine, jid: str, host: str) -> None:
+    """背景執行 traceroute，邊跑邊把每一跳放進 job（網頁輪詢即可看到進度）。"""
+    job = engine.trace_jobs[jid]
+    lines = engine.trace_lines or trace_mod.iter_lines
+    try:
+        async for line in lines(trace_mod.build_cmd(host)):
+            hop = trace_mod.parse_hop_line(line)
+            if hop:
+                job["hops"].append(hop)
+    except Exception as e:
+        job["error"] = str(e)
+    job["analysis"] = trace_mod.analyze_hops(job["hops"], bool(engine.env.get("vpn", {}).get("active")))
+    job["running"] = False
 
 
 def create_app(cfg: dict | None = None, storage: Storage | None = None,
@@ -181,6 +254,60 @@ def create_app(cfg: dict | None = None, storage: Storage | None = None,
         since = int(time.time()) - RANGES[range]
         return {"target": target, "range": range,
                 "points": engine.storage.minute_series(target, since)}
+
+    @app.get("/api/env")
+    def env():
+        """網路環境。SSID／對外 IP 預設由網頁遮蔽，這裡回傳原值（只綁本機）。"""
+        return {"env": engine.env, "wifi": engine.wifi, "public": engine.public or None}
+
+    @app.get("/api/events")
+    def events():
+        return list(engine.events)
+
+    @app.get("/api/series")
+    def series(target: str, range: str = "1h"):
+        """圖表資料：≤1h 用原始資料（分桶），24h/7d 用每分鐘彙總（loss/avg/p95）。"""
+        if range not in RANGES:
+            raise HTTPException(400, f"range 必須是 {list(RANGES)} 其中之一")
+        if target not in [t["name"] for t in engine.targets]:
+            raise HTTPException(404, "找不到這個目標")
+        since = int(time.time()) - RANGES[range]
+        if range in ("5m", "1h"):
+            bucket = 1 if range == "5m" else 10
+            return {"target": target, "range": range, "bucket_sec": bucket,
+                    "points": engine.storage.raw_series(target, since, bucket)}
+        return {"target": target, "range": range, "bucket_sec": 60 if range == "24h" else 300,
+                "points": engine.storage.minute_series(target, since)}
+
+    @app.get("/api/export.csv")
+    def export_csv(target: str, range: str = "24h"):
+        if range not in RANGES:
+            raise HTTPException(400, f"range 必須是 {list(RANGES)} 其中之一")
+        since = int(time.time()) - RANGES[range]
+        rows = ["ts,target,rtt_ms"] + [f"{t},{target.replace(',', ' ')},{'' if r is None else r}"
+                                       for t, r in engine.storage.raw_rows(target, since)]
+        return Response("\n".join(rows) + "\n", media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition": "attachment; filename=netsonar.csv"})
+
+    @app.post("/api/traceroute")
+    async def traceroute_start(body: dict):
+        host = str(body.get("target", "")).strip()
+        if not trace_mod.valid_target(host):
+            raise HTTPException(400, "目標格式不正確（只接受網址或 IP）")
+        if any(j["running"] for j in engine.trace_jobs.values()):
+            raise HTTPException(409, "已有路徑分析正在進行")
+        jid = str(int(time.time() * 1000))
+        engine.trace_jobs[jid] = {"id": jid, "target": host, "running": True, "hops": [], "analysis": None}
+        if len(engine.trace_jobs) > 5:
+            engine.trace_jobs.pop(next(iter(engine.trace_jobs)))
+        asyncio.create_task(_run_trace(engine, jid, host))
+        return {"id": jid}
+
+    @app.get("/api/traceroute/{jid}")
+    def traceroute_get(jid: str):
+        if jid not in engine.trace_jobs:
+            raise HTTPException(404, "找不到這個分析")
+        return engine.trace_jobs[jid]
 
     @app.get("/api/stream")
     async def stream():

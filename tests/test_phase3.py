@@ -8,18 +8,31 @@ from alerts import AlertManager
 from app import create_app
 from storage import Storage
 
-ROUTE_OUT = """   route to: default
-destination: default
-       mask: default
-    gateway: 192.168.0.1
-  interface: en0
-      flags: <UP,GATEWAY,DONE,STATIC,PRCLONING,GLOBAL>
+NETSTAT_OFF = """Routing tables
+
+Internet:
+Destination        Gateway            Flags               Netif Expire
+default            192.168.0.1        UGScg                 en0
+127                127.0.0.1          UCS                   lo0
+"""
+
+# 作者 Mac 開 NordVPN 時的實測形狀：VPN 路由在前、實體路由器帶 I（限定介面）
+NETSTAT_VPN = """Routing tables
+
+Internet:
+Destination        Gateway            Flags               Netif Expire
+default            10.5.0.2           UGScg                utun6
+default            192.168.0.1        UGScIg                 en0
+127                127.0.0.1          UCS                    lo0
 """
 
 
-def test_parse_route():
-    assert gateway.parse_route_output(ROUTE_OUT) == "192.168.0.1"
-    assert gateway.parse_route_output("route: writing to routing socket: not in table") is None
+def test_parse_default_routes():
+    assert gateway.pick_gateways(gateway.parse_default_routes(NETSTAT_OFF))["vpn"] is None
+    g = gateway.pick_gateways(gateway.parse_default_routes(NETSTAT_VPN))
+    assert g["physical"]["gateway"] == "192.168.0.1" and g["physical"]["iface"] == "en0"
+    assert g["vpn"]["gateway"] == "10.5.0.2" and g["vpn"]["iface"] == "utun6"
+    assert gateway.pick_gateways(gateway.parse_default_routes("")) == {"physical": None, "vpn": None}
 
 
 def _s(loss=0.0, p95=10.0, count=60):
@@ -99,8 +112,8 @@ CFG = {"targets": [{"name": "A", "host": "1.1.1.1"}], "interval_sec": 0.05,
 
 
 async def runner(cmd):
-    if cmd[0] == "route":
-        return 0, ROUTE_OUT
+    if cmd[0] == "netstat":
+        return 0, NETSTAT_VPN
     if cmd[-1] == "192.168.0.1":
         return 2, ""                     # 路由器不通
     return 0, "64 bytes from x: icmp_seq=0 ttl=57 time=12.0 ms"
@@ -128,7 +141,7 @@ def test_engine_adds_router_and_alerts(tmp_path):
 
 def test_no_gateway_means_no_router_target(tmp_path):
     async def noroute(cmd):
-        return (1, "not in table") if cmd[0] == "route" else (0, "time=1.0 ms")
+        return (1, "") if cmd[0] == "netstat" else (0, "time=1.0 ms")
     app = create_app(CFG, Storage(str(tmp_path / "p3b.db")), noroute, autostart=False,
                      notifier=lambda t, m: None)
     with TestClient(app) as c:

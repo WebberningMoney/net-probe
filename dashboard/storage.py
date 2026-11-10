@@ -95,6 +95,21 @@ class Storage:
             keys = ["minute", "count", "lost", "avg", "min", "max", "p50", "p95", "jitter"]
             return [dict(zip(keys, r)) for r in cur.fetchall()]
 
+    def raw_series(self, target: str, since_ts: int, bucket_sec: int) -> list:
+        """原始資料依 bucket_sec 秒分桶：每桶 avg/max/loss%（圖表用，避免一次送出數千點）。"""
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT (ts/?)*? AS b, COUNT(*), SUM(rtt IS NULL), AVG(rtt), MAX(rtt) "
+                "FROM samples WHERE target=? AND ts>=? GROUP BY b ORDER BY b",
+                (bucket_sec, bucket_sec, target, since_ts)).fetchall()
+        return [{"ts": b, "count": n, "loss_pct": round(l / n * 100, 1),
+                 "avg": None if a is None else round(a, 1), "max": m} for b, n, l, a, m in rows]
+
+    def raw_rows(self, target: str, since_ts: int) -> list:
+        with self._lock:
+            return self._db.execute("SELECT ts, rtt FROM samples WHERE target=? AND ts>=? ORDER BY ts",
+                                    (target, since_ts)).fetchall()
+
     def close(self) -> None:
         with self._lock:
             self._db.close()
