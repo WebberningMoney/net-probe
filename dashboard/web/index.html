@@ -26,7 +26,7 @@ main{max-width:1180px;margin:0 auto;padding:18px 24px 48px} section{display:none
 .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
 .panel h3{margin:0 0 10px;font-size:15px} .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
 .row button,.btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:5px 11px;cursor:pointer;font-size:13px}
-.row button.on,.btn.pri{background:var(--acc);color:#fff;border-color:var(--acc)}
+.row button.on,.btn.on,.btn.pri{background:var(--acc);color:#fff;border-color:var(--acc)}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--mute);margin-top:6px}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px}
 svg.chart{width:100%;height:260px;display:block} .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
 table{border-collapse:collapse;width:100%} td,th{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left;font-size:13px} th{color:var(--mute);font-weight:500}
@@ -60,8 +60,9 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
 </section>
 <section id="test">
   <div class="panel"><h3>定時測試</h3>
-    <div class="row" id="tstart"><button class="btn" data-m="5">5 分鐘</button><button class="btn" data-m="15">15 分鐘</button><button class="btn" data-m="60">60 分鐘</button>
-      <input type="text" id="tcustom" placeholder="自訂分鐘（1–720）" style="width:150px"><button class="btn pri" id="tcgo">開始</button><button class="btn" data-m="0">持續監測</button></div>
+    <div class="row" id="tstart"><button class="btn on" data-m="5">5 分鐘</button><button class="btn" data-m="15">15 分鐘</button><button class="btn" data-m="60">60 分鐘</button><button class="btn" data-m="0">持續監測</button>
+      <input type="text" id="tcustom" placeholder="自訂分鐘（1–720）" style="width:150px"><button class="btn pri" id="tcgo">▶ 開始測試</button></div>
+    <div class="hint" id="tsel"></div>
     <div id="tprog" class="hint"></div><div class="row"><button class="btn" id="tstop" style="display:none">結束並產生報告</button></div>
     <div id="treport"></div></div>
   <div class="panel"><h3>下載速度測試（Curl）</h3>
@@ -188,12 +189,16 @@ const dur=s=>s>=3600?`${Math.floor(s/3600)} 小時 ${Math.round(s%3600/60)} 分`
 async function startTest(m){
   const r=await fetch("/api/test/start",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({minutes:m||null})});
   if(!r.ok)alert((await r.json()).detail);pollTest();}
-document.querySelectorAll("#tstart [data-m]").forEach(b=>b.onclick=()=>startTest(+b.dataset.m));
-$("#tcgo").onclick=()=>{const m=parseInt($("#tcustom").value,10);if(!(m>=1&&m<=720))return alert("請輸入 1–720 的整數分鐘");startTest(m);};
+let selMin=5;   // 目前選的時長（分鐘）；0 = 持續監測。按「開始測試」才會真的開始
+function showSel(){document.querySelectorAll("#tstart [data-m]").forEach(b=>b.classList.toggle("on",+b.dataset.m===selMin&&!$("#tcustom").value));
+  $("#tsel").textContent="已選：" +($("#tcustom").value?`自訂 ${$("#tcustom").value} 分鐘`:selMin?`${selMin} 分鐘`:"持續監測（手動結束）")+"，按「開始測試」才會開始。";}
+document.querySelectorAll("#tstart [data-m]").forEach(b=>b.onclick=()=>{selMin=+b.dataset.m;$("#tcustom").value="";showSel();});
+$("#tcustom").oninput=showSel;showSel();
+$("#tcgo").onclick=()=>{let m=selMin;if($("#tcustom").value){m=parseInt($("#tcustom").value,10);if(!(m>=1&&m<=720))return alert("請輸入 1–720 的整數分鐘");}startTest(m);};
 $("#tstop").onclick=async()=>{await fetch("/api/test/stop",{method:"POST"});pollTest();};
 async function pollTest(){
   try{const t=await J("/api/test");
-    $("#tstop").style.display=t.state==="running"?"":"none";
+    $("#tstop").style.display=t.state==="running"?"":"none";$("#tcgo").disabled=t.state==="running";
     if(t.state==="running"){const el=t.now-t.started;
       $("#tprog").textContent=t.ends_at?`測試中：已進行 ${dur(el)}，剩餘 ${dur(Math.max(0,t.ends_at-t.now))}`:`持續監測中：已進行 ${dur(el)}（按「結束並產生報告」收尾）`;}
     else if(t.state==="done"){$("#tprog").textContent=`上次測試：${tm(t.started)} – ${tm(t.finished)}（${dur(t.finished-t.started)}）`;if($("#treport").dataset.k!==String(t.started)){$("#treport").dataset.k=t.started;renderReport(t);}}
