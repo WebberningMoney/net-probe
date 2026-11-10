@@ -187,14 +187,22 @@ def test_run_curl_chunks_and_deadline():
     async def run(cmd):
         calls.append(cmd[-1])
         n = int(cmd[-1].split("bytes=")[1])
+        if n >= 100_000_000:                                    # 模擬 Cloudflare 拒絕大檔
+            return 0, "403 0 0.03 0.12 0.2 0"
         return 0, f"200 12500000.0 0.03 0.12 {n / 12.5e6} {n}"          # 速度 100 Mbps，大小照要求回傳
     r = asyncio.run(sp.run_curl(run, 200_000_000))
-    assert len(calls) == 3 and r["ok"] and r["chunks"] == 3 and abs(r["mbps"] - 100) < 1.5 and not r["partial"]
+    assert len(calls) == 4 and r["ok"] and r["chunks"] == 3 and abs(r["mbps"] - 100) < 1.5 and not r["partial"]
     t = [0.0]
 
     def clock():
         t[0] += 100.0                                         # 每次呼叫前進 100 秒 → 時間很快用完
         return t[0]
+    # 伺服器若接受單次大檔，就只發一個請求
+    async def lenient(cmd):
+        n = int(cmd[-1].split("bytes=")[1])
+        return 0, f"200 12500000.0 0.03 0.12 {n / 12.5e6} {n}"
+    one = asyncio.run(sp.run_curl(lenient, 500_000_000))
+    assert one["ok"] and one["chunks"] == 1 and one["bytes"] == 500_000_000
     calls.clear()
     r = asyncio.run(sp.run_curl(run, 500_000_000, max_total_sec=180, clock=clock))
     assert r["ok"] and r["partial"] and len(calls) < 6
@@ -224,7 +232,7 @@ def test_timed_test_and_curl(tmp_path):
         assert c.post("/api/curl", json={"mb": 7}).status_code == 400
         cr = c.post("/api/curl").json()
         assert cr["ok"] and cr["mbps"] == 25.0 and cr["mb"] == 25
-        assert c.post("/api/curl", json={"mb": 100}).json()["chunks"] == 2
+        assert c.post("/api/curl", json={"mb": 100}).json()["ok"]
         done = c.post("/api/test/stop").json()
         assert done["state"] == "done" and done["report"]["targets"]["A"]["count"] >= 3
         assert done["report"]["curl"] and done["report"]["diagnosis"]["title"]

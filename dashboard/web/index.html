@@ -74,7 +74,7 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
       <button class="btn pri" id="cgo">測一次下載速度</button><span class="hint" id="cstat"></span></div>
     <div class="hint" id="cwarn"></div>
     <div id="clist"></div>
-    <div class="hint">從 Cloudflare 下載你選的大小（單次上限 1 億位元組，更大的量會自動拆成多次再合併計算；最久 3 分鐘，超過就用已下載的部分計算）。下載時會吃滿頻寬，同時間的延遲會變差（這也能看出網路塞車時的反應）。開著 VPN 時測到的是「經過 VPN 的速度」。</div></div>
+    <div class="hint">從 Cloudflare 下載你選的大小（大於 1 億位元組時先試單次下載，若 Cloudflare 拒絕才自動拆成多次再合併計算；最久 3 分鐘，超過就用已下載的部分計算）。下載時會吃滿頻寬，同時間的延遲會變差（這也能看出網路塞車時的反應）。開著 VPN 時測到的是「經過 VPN 的速度」。</div></div>
 </section>
 <section id="trace">
   <div class="panel"><h3>路徑分析（Traceroute）</h3>
