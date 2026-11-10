@@ -22,6 +22,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 import gateway
 import netenv
 import traceroute as trace_mod
+import speedtest
 import probe
 import stats
 from alerts import AlertManager
@@ -66,6 +67,9 @@ class Engine:
         self._last_wifi_check = -10**9
         self._wifi_busy = False
         self.public_lookup = cfg.get("public_ip_lookup", True)
+        self.test: dict = {"state": "idle"}     # 定時測試狀態
+        self.curl_results: deque = deque(maxlen=20)
+        self.curl_busy = False
         self.trace_lines = None            # 測試時可注入假的 traceroute 輸出
         self.trace_jobs: dict = {}         # job_id → 路徑分析進度
 
@@ -153,6 +157,9 @@ class Engine:
             self.windows.setdefault(n, deque(maxlen=60)).append(v)
         new_alerts = self.alerts.evaluate({n: list(w) for n, w in self.windows.items()}, ts)
         self.latest = {"ts": ts, "results": results, "alerts": new_alerts}
+        t = self.test
+        if t["state"] == "running" and t["ends_at"] and ts >= t["ends_at"]:
+            self.finish_test(ts)
         for q in list(self.subscribers):
             if q.qsize() < 5:              # 瀏覽器太慢就丟棄舊訊息，避免記憶體堆積
                 q.put_nowait(self.latest)
@@ -173,6 +180,44 @@ class Engine:
             except Exception as e:         # 單輪失敗不要讓整個監測停掉
                 print("tick error:", e)
             await asyncio.sleep(max(0.0, interval - (time.monotonic() - started)))
+
+    # ---- 定時測試：記下起訖時間，結束時用這段期間的原始資料產生報告 ----
+    def start_test(self, minutes: int | None) -> dict:
+        now = int(time.time())
+        self.test = {"state": "running", "started": now, "minutes": minutes,
+                     "ends_at": now + minutes * 60 if minutes else None,
+                     "vpn": bool(self.env.get("vpn", {}).get("active")), "report": None}
+        return self.test
+
+    def finish_test(self, now: int | None = None) -> dict:
+        t, now = self.test, now or int(time.time())
+        if t["state"] != "running":
+            return t
+        t.update(state="done", finished=now)
+        t["report"] = self.report(t["started"], now)
+        return t
+
+    def report(self, since: int, until: int) -> dict:
+        targets = {t["name"]: stats.summarize([r for ts, r in self.storage.raw_rows(t["name"], since) if ts <= until])
+                   for t in self.targets}
+        d = diagnose(targets, self.router_name, self.cfg.get("diagnosis"))
+        return {"since": since, "until": until, "seconds": until - since, "targets": targets,
+                "diagnosis": d, "alerts": [a for a in self.alerts.history if since <= a["ts"] <= until],
+                "events": [e for e in self.events if since <= e["ts"] <= until],
+                "curl": [c for c in self.curl_results if since <= c.get("ts", 0) <= until]}
+
+    async def run_curl_test(self) -> dict:
+        cc = self.cfg.get("curl_test", {})
+        self.curl_busy = True
+        try:
+            res = await speedtest.run_curl(self.runner, cc.get("bytes", 25_000_000),
+                                           cc.get("url", speedtest.DEFAULT_URL))
+        finally:
+            self.curl_busy = False
+        res["ts"] = int(time.time())
+        res["vpn"] = bool(self.env.get("vpn", {}).get("active"))
+        self.curl_results.appendleft(res)
+        return res
 
     def diagnosis(self, range_key: str = "5m") -> dict:
         return diagnose(self.summary(range_key), self.router_name, self.cfg.get("diagnosis"))
@@ -280,14 +325,48 @@ def create_app(cfg: dict | None = None, storage: Storage | None = None,
                 "points": engine.storage.minute_series(target, since)}
 
     @app.get("/api/export.csv")
-    def export_csv(target: str, range: str = "24h"):
+    def export_csv(target: str, range: str = "24h", since: int | None = None, until: int | None = None):
         if range not in RANGES:
             raise HTTPException(400, f"range 必須是 {list(RANGES)} 其中之一")
-        since = int(time.time()) - RANGES[range]
+        if since is None:
+            since = int(time.time()) - RANGES[range]
+        until = until or 10**12
         rows = ["ts,target,rtt_ms"] + [f"{t},{target.replace(',', ' ')},{'' if r is None else r}"
-                                       for t, r in engine.storage.raw_rows(target, since)]
+                                       for t, r in engine.storage.raw_rows(target, since) if t <= until]
         return Response("\n".join(rows) + "\n", media_type="text/csv; charset=utf-8",
                         headers={"Content-Disposition": "attachment; filename=netsonar.csv"})
+
+    @app.get("/api/test")
+    def test_get():
+        t = dict(engine.test)
+        t["now"] = int(time.time())
+        return t
+
+    @app.post("/api/test/start")
+    def test_start(body: dict):
+        m = body.get("minutes")                 # None = 持續監測（手動停止）
+        if m is not None:
+            if not isinstance(m, int) or isinstance(m, bool) or not 1 <= m <= 720:
+                raise HTTPException(400, "minutes 必須是 1–720 的整數")
+        if engine.test["state"] == "running":
+            raise HTTPException(409, "已有測試正在進行")
+        return engine.start_test(m)
+
+    @app.post("/api/test/stop")
+    def test_stop():
+        if engine.test["state"] != "running":
+            raise HTTPException(409, "目前沒有進行中的測試")
+        return engine.finish_test()
+
+    @app.post("/api/curl")
+    async def curl_start():
+        if engine.curl_busy:
+            raise HTTPException(409, "下載測試進行中")
+        return await engine.run_curl_test()
+
+    @app.get("/api/curl")
+    def curl_list():
+        return {"busy": engine.curl_busy, "results": list(engine.curl_results)}
 
     @app.post("/api/traceroute")
     async def traceroute_start(body: dict):

@@ -133,14 +133,16 @@ cd ~/Desktop/net-probe
 - **想更新到最新版**：在 `~/Desktop/net-probe` 裡執行 `git pull`。
 - **如果出現 `No such file or directory`**：代表你不在這個資料夾，先 `cd ~/Desktop/net-probe`。用 `pwd` 可以看目前位置、`ls` 可以看這裡有什麼檔案。
 
-**🆕 本機網頁儀表板（開發中，Phase 2 簡易版）**
+**🆕 NetSonar 本機網頁儀表板（網路聲納）**
 
 ```bash
 ./run_dashboard.sh     # 第一次會自動建立專屬 .venv 並安裝套件，之後直接啟動
 ```
 
 會在你的 Mac 上開啟 `http://127.0.0.1:8765`（只有你自己的電腦連得到，不上雲端）。按 `Ctrl + C` 結束。
-目標清單、告警門檻改 `dashboard/config.json`。儀表板會自動偵測你的路由器並一起測，頁面上方會用白話判讀問題偏向「你這一端」或「ISP／遠端」；網路變差時會跳出 macOS 通知（同一類警示 5 分鐘內只通知一次）。完整圖表介面、路由器 ping、告警通知會在後續階段加入。
+目標清單、告警門檻改 `dashboard/config.json`。儀表板會自動偵測你的路由器（開 VPN 時也會抓到實體路由器）並一起測，頁面上方用白話判讀問題偏向「你這一端」或「ISP／遠端」；網路變差時會跳出 macOS 通知（同一類警示 5 分鐘內只通知一次）。
+
+四個頁面：**即時**（目標卡、走勢圖、網路環境、警示）、**歷史**（5 分鐘～7 天趨勢、CSV 匯出）、**定時測試**（5／15／60 分鐘、自訂或持續監測，結束產生報告；含 Curl 下載速度測試）、**路徑分析**（Traceroute 逐跳）。Wi-Fi 名稱與對外 IP 預設遮蔽。開 VPN 時延遲會包含繞到 VPN 伺服器的距離，頁面會提醒。
 
 **進階：跳過選單／其他選項**
 
@@ -384,7 +386,7 @@ net-probe/
 ├── .gitignore          ← 避免把 .log 測試紀錄傳上 GitHub
 ├── docs/
 │   ├── RESOURCES.md    ← 相關開源專案、API 與擴充參考資源
-│   └── ARCHITECTURE.md ← 本機網頁儀表板的架構與技術選型（提案，尚未實作）
+│   └── ARCHITECTURE.md ← NetSonar 本機網頁儀表板的架構與技術選型
 └── legacy/
     └── ping_quad_monitor_mac_color_final_v4.5.sh   ← 原始未註解版（保留備查）
 ```

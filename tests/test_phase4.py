@@ -168,3 +168,37 @@ def test_api_env_series_export_trace(tmp_path):
             time.sleep(0.05)
         assert len(j["hops"]) == 3 and j["analysis"]["title"] and "VPN" in j["analysis"]["detail"]
         assert c.get("/api/events").json() == []
+
+
+def test_speedtest_parse():
+    import speedtest as sp
+    r = sp.parse_result("200 3125000.0 0.03 0.12 8.0 25000000")
+    assert r["ok"] and r["mbps"] == 25.0 and r["connect_ms"] == 30 and r["ttfb_ms"] == 120
+    assert sp.parse_result("garbage") is None
+    assert "bytes=90000000" in sp.build_cmd(999_999_999)[-1] and "bytes=1000000" in sp.build_cmd(5)[-1]
+
+
+def test_timed_test_and_curl(tmp_path):
+    async def run(cmd):
+        if cmd[0] == "curl":
+            return 0, "200 3125000.0 0.03 0.12 8.0 25000000"
+        return await _runner(cmd)
+    app = create_app(CFG, Storage(str(tmp_path / "p5.db")), run, autostart=False)
+    with TestClient(app) as c:
+        assert c.post("/api/test/start", json={"minutes": 0}).status_code == 400
+        assert c.post("/api/test/stop").status_code == 409
+        assert c.post("/api/test/start", json={"minutes": 5}).json()["state"] == "running"
+        assert c.post("/api/test/start", json={"minutes": 5}).status_code == 409
+        eng = app.state.engine
+
+        async def go():
+            for _ in range(3):
+                await eng.tick()
+        asyncio.run(go())
+        cr = c.post("/api/curl").json()
+        assert cr["ok"] and cr["mbps"] == 25.0
+        done = c.post("/api/test/stop").json()
+        assert done["state"] == "done" and done["report"]["targets"]["A"]["count"] >= 3
+        assert done["report"]["curl"] and done["report"]["diagnosis"]["title"]
+        assert c.get("/api/test").json()["state"] == "done"
+        assert c.post("/api/test/start", json={"minutes": None}).json()["ends_at"] is None
