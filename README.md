@@ -1,4 +1,4 @@
-# 🌐 net-probe
+# 🌐 NetSonar（網路聲納）
 
 > 一支只用 macOS 內建工具寫成的「網路品質體檢」腳本：同時對 4 個網路位址測試，時間到（或按 Ctrl+C）就給你一張成績單。
 > *A zero-dependency macOS shell script that pings 4 targets in parallel and grades your connection.*
@@ -32,7 +32,7 @@
 - 打電動「Lag」，卻不知道是自己家網路、還是遊戲伺服器的問題？
 - 打電話給網路公司客服，對方說「我們這邊測起來正常」？
 
-**net-probe 就是幫你「用數據說話」的小工具。**
+**NetSonar 就是幫你「用數據說話」的小工具。**
 
 它的做法很像「對著山谷大喊，聽回音要多久」：
 
@@ -89,8 +89,8 @@
 
 ```bash
 cd ~/Desktop
-git clone https://github.com/WebberningMoney/net-probe.git
-cd net-probe
+git clone https://github.com/WebberningMoney/net-sonar.git
+cd net-sonar
 ```
 
 想放在「下載」資料夾？把第一行換成 `cd ~/Downloads` 即可。
@@ -125,13 +125,13 @@ chmod +x net_probe.sh     # 第一次需要：允許這支檔案被執行
 每次打開新的終端機視窗，都要**先進到資料夾**才能執行（放在桌面的話）：
 
 ```bash
-cd ~/Desktop/net-probe
+cd ~/Desktop/net-sonar
 ./net_probe.sh
 ```
 
-- **測試紀錄檔（`.log`）會存在你執行時所在的資料夾**，也就是 `~/Desktop/net-probe/`。想在 Finder 打開：在終端機輸入 `open .`。
-- **想更新到最新版**：在 `~/Desktop/net-probe` 裡執行 `git pull`。
-- **如果出現 `No such file or directory`**：代表你不在這個資料夾，先 `cd ~/Desktop/net-probe`。用 `pwd` 可以看目前位置、`ls` 可以看這裡有什麼檔案。
+- **測試紀錄檔（`.log`）會存在你執行時所在的資料夾**，也就是 `~/Desktop/net-sonar/`。想在 Finder 打開：在終端機輸入 `open .`。
+- **想更新到最新版**：在 `~/Desktop/net-sonar` 裡執行 `git pull`。
+- **如果出現 `No such file or directory`**：代表你不在這個資料夾，先 `cd ~/Desktop/net-sonar`。用 `pwd` 可以看目前位置、`ls` 可以看這裡有什麼檔案。
 
 **🆕 NetSonar 本機網頁儀表板（網路聲納）**
 
@@ -323,7 +323,7 @@ A：忘了加執行權限。輸入 `chmod +x net_probe.sh` 再試一次。
 A：這是刻意設計，因為用到 macOS 專屬指令。Windows / Linux 暫不支援。
 
 **Q：出現 `fatal: not a git repository` 或 `No such file or directory`？**
-A：你不在專案資料夾裡。輸入 `cd ~/Desktop/net-probe`（依你放的位置調整）再試一次；還沒下載過的話，請從「快速開始」的步驟 ② 開始。
+A：你不在專案資料夾裡。輸入 `cd ~/Desktop/net-sonar`（依你放的位置調整）再試一次；還沒下載過的話，請從「快速開始」的步驟 ② 開始。
 
 **Q：Curl 表格顯示 `❌ HTTP 403`（或其他非 200）？**
 A：代表下載被伺服器拒絕，這次測試無效，所以不計分。常見原因是測速網址的限制有變（例如 Cloudflare 現在不接受 `bytes` ≥ 100,000,000）、或網路環境被擋。可以換一個測速網址試試：`./net_probe.sh "https://你的測速網址/檔案.bin"`。Ping 的結果不受影響。
@@ -378,7 +378,7 @@ v4.8 修正了原版 v4.5 的 12 個問題。KI-1 ~ KI-12 全部已在真實 Mac
 ## 專案結構
 
 ```text
-net-probe/
+net-sonar/
 ├── net_probe.sh        ← 主程式（完整教學註解版）
 ├── README.md           ← 你正在看的這份說明
 ├── LICENSE             ← MIT 授權

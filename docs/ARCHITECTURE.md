@@ -90,7 +90,7 @@ ping 執行緒 ×5 ──► 取樣佇列 ──► SQLite（原始樣本 + 每�
 ## 6. 預計目錄結構
 
 ```text
-net-probe/
+net-sonar/
 ├── net_probe.sh              ← 現有 Bash 版（保留）
 ├── dashboard/
 │   ├── dashboard.py          ← 入口：啟動伺服器與監測
