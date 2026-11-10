@@ -176,6 +176,32 @@ def test_speedtest_parse():
     assert r["ok"] and r["mbps"] == 25.0 and r["connect_ms"] == 30 and r["ttfb_ms"] == 120
     assert sp.parse_result("garbage") is None
     assert "bytes=90000000" in sp.build_cmd(999_999_999)[-1] and "bytes=1000000" in sp.build_cmd(5)[-1]
+    assert sp.plan_chunks(25_000_000) == [25_000_000] and sp.plan_chunks(100_000_000) == [50_000_000] * 2
+    assert len(sp.plan_chunks(1_000_000_000)) == 12 and all(c < 100_000_000 for c in sp.plan_chunks(1_000_000_000))
+
+
+def test_run_curl_chunks_and_deadline():
+    import speedtest as sp
+    calls = []
+
+    async def run(cmd):
+        calls.append(cmd[-1])
+        n = int(cmd[-1].split("bytes=")[1])
+        return 0, f"200 12500000.0 0.03 0.12 {n / 12.5e6} {n}"          # 速度 100 Mbps，大小照要求回傳
+    r = asyncio.run(sp.run_curl(run, 200_000_000))
+    assert len(calls) == 3 and r["ok"] and r["chunks"] == 3 and abs(r["mbps"] - 100) < 1.5 and not r["partial"]
+    t = [0.0]
+
+    def clock():
+        t[0] += 100.0                                         # 每次呼叫前進 100 秒 → 時間很快用完
+        return t[0]
+    calls.clear()
+    r = asyncio.run(sp.run_curl(run, 500_000_000, max_total_sec=180, clock=clock))
+    assert r["ok"] and r["partial"] and len(calls) < 6
+
+    async def bad(cmd):
+        return 28, ""
+    assert not asyncio.run(sp.run_curl(bad, 50_000_000))["ok"]
 
 
 def test_timed_test_and_curl(tmp_path):
@@ -195,8 +221,10 @@ def test_timed_test_and_curl(tmp_path):
             for _ in range(3):
                 await eng.tick()
         asyncio.run(go())
+        assert c.post("/api/curl", json={"mb": 7}).status_code == 400
         cr = c.post("/api/curl").json()
-        assert cr["ok"] and cr["mbps"] == 25.0
+        assert cr["ok"] and cr["mbps"] == 25.0 and cr["mb"] == 25
+        assert c.post("/api/curl", json={"mb": 100}).json()["chunks"] == 2
         done = c.post("/api/test/stop").json()
         assert done["state"] == "done" and done["report"]["targets"]["A"]["count"] >= 3
         assert done["report"]["curl"] and done["report"]["diagnosis"]["title"]

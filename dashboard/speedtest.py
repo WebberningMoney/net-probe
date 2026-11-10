@@ -6,12 +6,22 @@
 """
 from __future__ import annotations
 
+import time
+
 DEFAULT_URL = "https://speed.cloudflare.com/__down?bytes={bytes}"
-MAX_BYTES = 90_000_000
+CHUNK_MAX = 90_000_000                      # Cloudflare 單次 bytes 必須 < 1 億
+SIZES_MB = (25, 50, 100, 200, 500, 1000)    # 介面可選的總下載量
+MAX_TOTAL_SEC = 180                         # 全部下載的時間上限，超過就用「已下載的部分」計算
+
+
+def plan_chunks(total_bytes: int) -> list:
+    """總量超過單次上限就平均切成數次：500 MB → 6 次 × 約 83 MB。"""
+    n = -(-total_bytes // CHUNK_MAX)         # 無條件進位
+    return [total_bytes // n] * n
 
 
 def build_cmd(nbytes: int, url_tpl: str = DEFAULT_URL, max_time: int = 40) -> list:
-    nbytes = max(1_000_000, min(int(nbytes), MAX_BYTES))
+    nbytes = max(1_000_000, min(int(nbytes), CHUNK_MAX))
     return ["curl", "-s", "-o", "/dev/null", "--max-time", str(max_time),
             "-w", "%{http_code} %{speed_download} %{time_connect} %{time_starttransfer} %{time_total} %{size_download}",
             url_tpl.format(bytes=nbytes)]
@@ -30,14 +40,29 @@ def parse_result(out: str) -> dict | None:
     return d
 
 
-async def run_curl(runner, nbytes: int, url_tpl: str = DEFAULT_URL) -> dict:
-    try:
-        code, out = await runner(build_cmd(nbytes, url_tpl))
-    except OSError:
-        return {"ok": False, "error": "找不到 curl"}
-    res = parse_result(out) if out.strip() else None
-    if res is None:
-        return {"ok": False, "error": f"curl 失敗（代碼 {code}），可能是網路不通或逾時"}
-    if not res["ok"]:
-        res["error"] = f"伺服器回應 {res['http']}"
-    return res
+async def run_curl(runner, total_bytes: int, url_tpl: str = DEFAULT_URL,
+                   max_total_sec: float = MAX_TOTAL_SEC, clock=time.monotonic) -> dict:
+    """依序下載各段並合併：速度＝總位元組 ÷ 總下載時間。超過時間上限就只算已完成的部分。"""
+    chunks = plan_chunks(max(1_000_000, int(total_bytes)))
+    t0, done, parts, err = clock(), 0, [], None
+    for n in chunks:
+        left = max_total_sec - (clock() - t0)
+        if parts and left < 5:               # 時間用完：停止，用已下載的部分計算
+            break
+        try:
+            code, out = await runner(build_cmd(n, url_tpl, max_time=max(5, int(left))))
+        except OSError:
+            return {"ok": False, "error": "找不到 curl"}
+        r = parse_result(out) if out.strip() else None
+        if r is None or not r["ok"]:
+            err = f"curl 失敗（代碼 {code}）" if r is None else f"伺服器回應 {r['http']}"
+            break
+        parts.append(r)
+    if not parts:
+        return {"ok": False, "error": (err or "下載失敗") + "，可能是網路不通或逾時"}
+    secs = sum(p["seconds"] for p in parts) or 0.001
+    got = sum(p["bytes"] for p in parts)
+    return {"ok": True, "http": 200, "bytes": got, "requested": sum(chunks), "chunks": len(parts),
+            "seconds": round(secs, 1), "mbps": round(got * 8 / secs / 1e6, 1),
+            "connect_ms": parts[0]["connect_ms"], "ttfb_ms": parts[0]["ttfb_ms"],
+            "partial": got < sum(chunks) * 0.99, "error": err if got < sum(chunks) * 0.99 else None}

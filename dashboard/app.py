@@ -206,11 +206,11 @@ class Engine:
                 "events": [e for e in self.events if since <= e["ts"] <= until],
                 "curl": [c for c in self.curl_results if since <= c.get("ts", 0) <= until]}
 
-    async def run_curl_test(self) -> dict:
+    async def run_curl_test(self, mb: int = 25) -> dict:
         cc = self.cfg.get("curl_test", {})
         self.curl_busy = True
         try:
-            res = await speedtest.run_curl(self.runner, cc.get("bytes", 25_000_000),
+            res = await speedtest.run_curl(self.runner, mb * 1_000_000,
                                            cc.get("url", speedtest.DEFAULT_URL))
         finally:
             self.curl_busy = False
@@ -359,10 +359,15 @@ def create_app(cfg: dict | None = None, storage: Storage | None = None,
         return engine.finish_test()
 
     @app.post("/api/curl")
-    async def curl_start():
+    async def curl_start(body: dict | None = None):
+        mb = (body or {}).get("mb", 25)
+        if mb not in speedtest.SIZES_MB:
+            raise HTTPException(400, f"mb 必須是 {list(speedtest.SIZES_MB)} 其中之一")
         if engine.curl_busy:
             raise HTTPException(409, "下載測試進行中")
-        return await engine.run_curl_test()
+        res = await engine.run_curl_test(mb)
+        res["mb"] = mb
+        return res
 
     @app.get("/api/curl")
     def curl_list():

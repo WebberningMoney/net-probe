@@ -44,7 +44,11 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
   <div id="vpnbar"></div>
   <div id="diag" class="diag"></div>
   <div id="cards" class="cards"></div>
-  <div class="panel"><h3>延遲走勢（毫秒，愈低愈好）</h3>
+  <details class="panel" id="mosinfo"><summary style="cursor:pointer;font-weight:600">❓ MOS 是什麼？怎麼看？</summary>
+  <p><b>MOS（Mean Opinion Score）＝通話品質分</b>。電信業用它回答一個問題：<b>現在用這條網路打視訊或語音通話，聽起來順不順？</b>本工具用延遲、抖動、丟包換算出近似值（簡化的 ITU-T E-model），範圍 1～4.5。</p>
+  <table><tr><th>MOS</th><th>白話意思</th></tr><tr><td>4.3 以上</td><td>極佳：通話幾乎感覺不到網路存在</td></tr><tr><td>4.0 – 4.3</td><td>良好：多數人不會察覺問題</td></tr><tr><td>3.6 – 4.0</td><td>尚可：偶爾有點延遲或雜音，部分人會注意到</td></tr><tr><td>3.1 – 3.6</td><td>不佳：明顯卡頓、搶話</td></tr><tr><td>3.1 以下</td><td>很差：通話困難</td></tr></table>
+  <p class="hint">• MOS 對「偶爾的尖峰」比較寬容，所以它可能是「良好」、但下方的分數（嚴格版，看平均與抖動）卻是 Poor——兩者回答的問題不同：MOS＝通話順不順，分數＝整體網路穩不穩。<br>• 開 VPN 時延遲會包含繞到 VPN 伺服器的距離，分數會偏低，但 MOS 通常仍不錯。<br>• 滿分約 4.4（理想網路也到不了 4.5）。</p></details>
+<div class="panel"><h3>延遲走勢（毫秒，愈低愈好）</h3>
     <div class="row" id="ranges"></div><svg id="chart" class="chart"></svg><div id="legend" class="legend"></div>
     <div class="hint">灰色虛線＝網路環境變化（VPN 開關、換 Wi-Fi 頻道等）。1 小時以內為平均值，24 小時以上為每分鐘平均。</div></div>
   <div class="grid">
@@ -66,9 +70,11 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
     <div id="tprog" class="hint"></div><div class="row"><button class="btn" id="tstop" style="display:none">結束並產生報告</button></div>
     <div id="treport"></div></div>
   <div class="panel"><h3>下載速度測試（Curl）</h3>
-    <div class="row"><button class="btn pri" id="cgo">測一次下載速度</button><span class="hint" id="cstat"></span></div>
+    <div class="row"><select id="csize" class="btn"><option value="25">25 MB</option><option value="50">50 MB</option><option value="100">100 MB</option><option value="200">200 MB</option><option value="500">500 MB</option><option value="1000">1 GB</option></select>
+      <button class="btn pri" id="cgo">測一次下載速度</button><span class="hint" id="cstat"></span></div>
+    <div class="hint" id="cwarn"></div>
     <div id="clist"></div>
-    <div class="hint">從 Cloudflare 下載約 25 MB。下載時會吃滿頻寬，同時間的延遲會變差（這也能看出網路塞車時的反應）。開著 VPN 時測到的是「經過 VPN 的速度」。</div></div>
+    <div class="hint">從 Cloudflare 下載你選的大小（單次上限 1 億位元組，更大的量會自動拆成多次再合併計算；最久 3 分鐘，超過就用已下載的部分計算）。下載時會吃滿頻寬，同時間的延遲會變差（這也能看出網路塞車時的反應）。開著 VPN 時測到的是「經過 VPN 的速度」。</div></div>
 </section>
 <section id="trace">
   <div class="panel"><h3>路徑分析（Traceroute）</h3>
@@ -213,12 +219,14 @@ function renderReport(t){
    `<p class="hint">期間 ${tm(r.since)} – ${tm(r.until)}，警示 ${r.alerts.length} 則，環境變化 ${r.events.length} 次${r.events.length?"："+r.events.map(e=>esc(e.text)).join("、"):""}。</p>`+
    (r.curl.length?`<p class="hint">期間下載測試：${r.curl.map(c=>c.ok?c.mbps+" Mbps":"失敗").join("、")}</p>`:"")+
    `<div class="row"><button class="btn" onclick="window.print()">列印／存成 PDF</button></div>`;}
-$("#cgo").onclick=async()=>{$("#cgo").disabled=true;$("#cstat").textContent="下載中…（最多 40 秒）";
-  const r=await fetch("/api/curl",{method:"POST"});$("#cgo").disabled=false;
+const warn=()=>{const mb=+$("#csize").value;$("#cwarn").textContent=mb>=200?`⚠️ 會消耗約 ${mb>=1000?"1 GB":mb+" MB"} 的網路流量；若使用行動熱點或有流量上限，請留意。速度慢時會花較久。`:"";};
+$("#csize").onchange=warn;
+$("#cgo").onclick=async()=>{$("#cgo").disabled=true;$("#cstat").textContent="下載中…（最久約 3 分鐘，請勿關閉頁面）";
+  const r=await fetch("/api/curl",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mb:+$("#csize").value})});$("#cgo").disabled=false;
   $("#cstat").textContent=r.ok?"完成":(await r.json()).detail;loadCurl();};
 async function loadCurl(){try{const d=await J("/api/curl");
-  $("#clist").innerHTML=d.results.length?`<table><tr><th>時間</th><th>速度</th><th>連線</th><th>首位元組</th><th>總時間</th><th>備註</th></tr>`+d.results.map(c=>
-    `<tr><td>${tm(c.ts)}</td><td>${c.ok?c.mbps+" Mbps":"失敗"}</td><td>${c.connect_ms??"—"} ms</td><td>${c.ttfb_ms??"—"} ms</td><td>${c.seconds??"—"} s</td><td>${esc(c.error||"")}${c.vpn?" 🔒VPN":""}</td></tr>`).join("")+`</table>`:"";}catch(e){}}
+  $("#clist").innerHTML=d.results.length?`<table><tr><th>時間</th><th>大小</th><th>速度</th><th>連線</th><th>首位元組</th><th>總時間</th><th>備註</th></tr>`+d.results.map(c=>
+    `<tr><td>${tm(c.ts)}</td><td>${c.ok?(c.bytes/1e6).toFixed(0)+" MB"+(c.partial?`（原定 ${c.mb||""} MB）`:""):"—"}</td><td>${c.ok?c.mbps+" Mbps":"失敗"}</td><td>${c.connect_ms??"—"} ms</td><td>${c.ttfb_ms??"—"} ms</td><td>${c.seconds??"—"} s</td><td>${c.partial?"時間到，只算已下載的部分 ":""}${esc(c.error||"")}${c.vpn?" 🔒VPN":""}</td></tr>`).join("")+`</table>`:"";}catch(e){}}
 setInterval(pollTest,2000);pollTest();loadCurl();
 
 /* ---------- 啟動 ---------- */
