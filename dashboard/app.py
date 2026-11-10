@@ -22,6 +22,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 import gateway
 import netenv
 import traceroute as trace_mod
+import settings as settings_mod
 import speedtest
 import probe
 import stats
@@ -33,10 +34,19 @@ BASE = Path(__file__).resolve().parent
 RANGES = {"5m": 300, "1h": 3600, "24h": 86400, "7d": 7 * 86400}
 
 
-def load_config() -> dict:
+def settings_path() -> Path:
+    return Path(os.environ.get("NETPROBE_SETTINGS", BASE / "settings.json"))
+
+
+def load_base_config() -> dict:
     # NETPROBE_CONFIG：測試或進階使用者可指定另一份設定檔
     path = Path(os.environ.get("NETPROBE_CONFIG", BASE / "config.json"))
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_config() -> dict:
+    """預設值（config.json）＋ 使用者在網頁上改的設定（settings.json）。"""
+    return settings_mod.merge(load_base_config(), settings_mod.load_overrides(settings_path()))
 
 
 class Engine:
@@ -44,6 +54,8 @@ class Engine:
 
     def __init__(self, cfg: dict, storage: Storage, runner=None, notifier=None):
         self.cfg, self.storage = cfg, storage
+        self.base_cfg = dict(cfg)         # 「恢復預設」用
+        self._notifier = notifier
         self.runner = runner or probe._real_runner
         self.latest: dict = {"ts": 0, "results": {}}
         self.subscribers: set = set()      # 每個 SSE 連線一個 queue
@@ -79,6 +91,24 @@ class Engine:
         if self.gateway_enabled and self.gateway_ip:
             base.append({"name": self.router_name, "host": self.gateway_ip})
         return base
+
+    def apply_config(self, cfg: dict) -> None:
+        """設定改了就立即生效（不必重啟）：目標、間隔、路由器、警示、對外 IP 查詢。"""
+        self.cfg = cfg
+        gw = cfg.get("gateway", {})
+        self.gateway_enabled = gw.get("enabled", False)
+        self.router_name = gw.get("name", "路由器") if self.gateway_enabled else None
+        if not self.gateway_enabled:
+            self.gateway_ip = None
+        self._last_gw_check = -10**9
+        self.public_lookup = cfg.get("public_ip_lookup", True)
+        history = self.alerts.history
+        self.alerts = AlertManager(cfg.get("alerts"), self.router_name, self._notifier)
+        self.alerts.history = history
+        keep = {t["name"] for t in self.targets} | {t["name"] for t in cfg["targets"]}
+        for n in list(self.windows):
+            if n not in keep:
+                del self.windows[n]
 
     def stop_streams(self) -> None:
         """通知所有 SSE 連線「該結束了」。
@@ -244,10 +274,14 @@ async def _run_trace(engine: Engine, jid: str, host: str) -> None:
 
 
 def create_app(cfg: dict | None = None, storage: Storage | None = None,
-               runner=None, autostart: bool = True, notifier=None) -> FastAPI:
+               runner=None, autostart: bool = True, notifier=None, settings_file: Path | None = None) -> FastAPI:
+    from_disk = cfg is None
     cfg = cfg or load_config()
+    sfile = Path(settings_file) if settings_file else settings_path()
     storage = storage or Storage(os.environ.get("NETPROBE_DB", str(BASE / "netprobe.db")))
     engine = Engine(cfg, storage, runner, notifier)
+    if from_disk:
+        engine.base_cfg = load_base_config()      # 「恢復預設」要回到 config.json，而不是目前（含自訂）的設定
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -299,6 +333,31 @@ def create_app(cfg: dict | None = None, storage: Storage | None = None,
         since = int(time.time()) - RANGES[range]
         return {"target": target, "range": range,
                 "points": engine.storage.minute_series(target, since)}
+
+    def _settings_view():
+        return {"settings": {k: engine.cfg.get(k) for k in settings_mod.EDITABLE if k in engine.cfg},
+                "defaults": {k: engine.base_cfg.get(k) for k in settings_mod.EDITABLE if k in engine.base_cfg},
+                "customized": sfile.exists()}
+
+    @app.get("/api/settings")
+    def settings_get():
+        return _settings_view()
+
+    @app.put("/api/settings")
+    def settings_put(body: dict):
+        try:
+            clean = settings_mod.validate(body)
+        except settings_mod.SettingsError as e:
+            raise HTTPException(400, str(e))
+        settings_mod.save_overrides(sfile, clean)
+        engine.apply_config({**engine.base_cfg, **clean})
+        return _settings_view()
+
+    @app.post("/api/settings/reset")
+    def settings_reset():
+        settings_mod.reset(sfile)
+        engine.apply_config(dict(engine.base_cfg))
+        return _settings_view()
 
     @app.get("/api/env")
     def env():

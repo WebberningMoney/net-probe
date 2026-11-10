@@ -34,11 +34,11 @@ td.k{color:var(--mute);width:38%} .mask{cursor:pointer;color:var(--acc);margin-l
 ul.list{margin:0;padding-left:18px} ul.list li{margin:3px 0} small.m{color:var(--mute)} .hint{color:var(--mute);font-size:12px}
 input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:14px;width:240px}
 .hop.high td{background:#fef2f2}.hop.none td{color:var(--mute)}
-</style>
+.form{display:grid;gap:10px}.form label{display:flex;gap:8px;align-items:center}.form input[type=number]{width:80px;border:1px solid var(--line);border-radius:8px;padding:5px 8px}#stargets input{width:100%}#stargets .btn{white-space:nowrap}code{background:#eef2f6;padding:1px 5px;border-radius:4px}</style>
 </head>
 <body>
 <header><img src="/icon.svg" alt=""><div><b>NetSonar</b> <small>網路聲納</small></div>
-<nav><button data-t="live" class="on">即時</button><button data-t="hist">歷史</button><button data-t="test">定時測試</button><button data-t="trace">路徑分析</button></nav></header>
+<nav><button data-t="live" class="on">即時</button><button data-t="hist">歷史</button><button data-t="test">定時測試</button><button data-t="trace">路徑分析</button><button data-t="set">設定</button></nav></header>
 <main>
 <section id="live" class="on">
   <div id="vpnbar"></div>
@@ -75,6 +75,28 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
     <div class="hint" id="cwarn"></div>
     <div id="clist"></div>
     <div class="hint">從 Cloudflare 下載你選的大小（大於 1 億位元組時先試單次下載，若 Cloudflare 拒絕才自動拆成多次再合併計算；最久 3 分鐘，超過就用已下載的部分計算）。下載時會吃滿頻寬，同時間的延遲會變差（這也能看出網路塞車時的反應）。開著 VPN 時測到的是「經過 VPN 的速度」。</div></div>
+</section>
+<section id="set">
+  <div class="panel"><h3>監測目標</h3>
+    <div class="hint">要 ping 誰。新增或修改後按下方「儲存設定」立即生效，不必重新啟動。最多 8 個。</div>
+    <table id="stargets"></table><div class="row"><button class="btn" id="sadd">＋ 新增目標</button></div></div>
+  <div class="panel"><h3>測量</h3><div class="form">
+    <label>測量間隔（秒）<input type="number" id="s_interval" step="0.5" min="0.5" max="10"></label>
+    <label>逾時（秒）<input type="number" id="s_timeout" min="1" max="5"></label>
+    <label><input type="checkbox" id="s_gw"> 同時測路由器　名稱 <input type="text" id="s_gwname" style="width:120px"></label>
+    <label><input type="checkbox" id="s_pub"> 查詢對外 IP／ISP（會向 ipinfo.io 發出一次請求）</label></div></div>
+  <div class="panel"><h3>警示</h3><div class="form">
+    <label><input type="checkbox" id="s_aon"> 啟用警示</label>
+    <label><input type="checkbox" id="s_anotif"> 同時跳出 macOS 通知</label>
+    <label>連續逾時達 <input type="number" id="s_ato" min="2" max="120"> 次</label>
+    <label>近 1 分鐘丟包率達 <input type="number" id="s_aloss" min="1" max="100"> %</label>
+    <label>近 1 分鐘 p95 延遲達 <input type="number" id="s_ap95" min="10" max="5000"> ms</label>
+    <label>同一類警示，<input type="number" id="s_acd" min="10" max="3600"> 秒內只通知一次</label></div></div>
+  <details class="panel"><summary style="cursor:pointer;font-weight:600">進階：下載測試網址</summary>
+    <div class="hint">留空使用預設（Cloudflare）。網址必須是 https，並用 <code>{bytes}</code> 代表要下載的位元組數。</div>
+    <input type="text" id="s_curl" style="width:100%;margin-top:8px"></details>
+  <div class="row"><button class="btn pri" id="ssave">儲存設定</button><button class="btn" id="sreset">恢復預設</button><span id="smsg" class="hint"></span></div>
+  <div class="hint">設定存在 <code>dashboard/settings.json</code>（不會被 git 更新覆蓋）。連接埠（8765）需修改 <code>config.json</code> 並重新啟動。</div>
 </section>
 <section id="trace">
   <div class="panel"><h3>路徑分析（Traceroute）</h3>
@@ -228,6 +250,38 @@ async function loadCurl(){try{const d=await J("/api/curl");
   $("#clist").innerHTML=d.results.length?`<table><tr><th>時間</th><th>大小</th><th>速度</th><th>連線</th><th>首位元組</th><th>總時間</th><th>備註</th></tr>`+d.results.map(c=>
     `<tr><td>${tm(c.ts)}</td><td>${c.ok?(c.bytes/1e6).toFixed(0)+" MB"+(c.partial?`（原定 ${c.mb||""} MB）`:""):"—"}</td><td>${c.ok?c.mbps+" Mbps":"失敗"}</td><td>${c.connect_ms??"—"} ms</td><td>${c.ttfb_ms??"—"} ms</td><td>${c.seconds??"—"} s</td><td>${c.partial?"時間到，只算已下載的部分 ":""}${esc(c.error||"")}${c.vpn?" 🔒VPN":""}</td></tr>`).join("")+`</table>`:"";}catch(e){}}
 setInterval(pollTest,2000);pollTest();loadCurl();
+
+
+/* ---------- 設定 ---------- */
+let sTargets=[];
+function drawTargets(){
+  $("#stargets").innerHTML=`<tr><th style="width:30%">名稱</th><th>位址（網址或 IP）</th><th style="width:80px"></th></tr>`+sTargets.map((t,i)=>
+    `<tr><td><input type="text" data-i="${i}" data-f="name" value="${esc(t.name)}"></td><td><input type="text" data-i="${i}" data-f="host" value="${esc(t.host)}"></td><td><button class="btn" data-del="${i}" ${sTargets.length<=1?"disabled":""}>刪除</button></td></tr>`).join("");
+  $("#stargets").querySelectorAll("input").forEach(e=>e.oninput=()=>{sTargets[+e.dataset.i][e.dataset.f]=e.value;});
+  $("#stargets").querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{sTargets.splice(+b.dataset.del,1);drawTargets();});
+  $("#sadd").disabled=sTargets.length>=8;
+}
+$("#sadd").onclick=()=>{sTargets.push({name:"",host:""});drawTargets();};
+function fillSettings(d){
+  const c=d.settings,a=c.alerts||{};sTargets=(c.targets||[]).map(t=>({...t}));drawTargets();
+  $("#s_interval").value=c.interval_sec??1;$("#s_timeout").value=c.ping_timeout_sec??1;
+  $("#s_gw").checked=!!(c.gateway||{}).enabled;$("#s_gwname").value=(c.gateway||{}).name||"路由器";$("#s_pub").checked=c.public_ip_lookup!==false;
+  $("#s_aon").checked=a.enabled!==false;$("#s_anotif").checked=a.macos_notification!==false;$("#s_ato").value=a.consecutive_timeouts??5;
+  $("#s_aloss").value=a.loss_pct_1m??10;$("#s_ap95").value=a.p95_ms_1m??150;$("#s_acd").value=a.cooldown_sec??300;$("#s_curl").value=(c.curl_test||{}).url||"";
+  $("#sreset").disabled=!d.customized;
+}
+async function loadSettings(){try{fillSettings(await J("/api/settings"));}catch(e){}}
+$("#ssave").onclick=async()=>{
+  const body={targets:sTargets,interval_sec:+$("#s_interval").value,ping_timeout_sec:+$("#s_timeout").value,
+    gateway:{enabled:$("#s_gw").checked,name:$("#s_gwname").value},public_ip_lookup:$("#s_pub").checked,
+    alerts:{enabled:$("#s_aon").checked,macos_notification:$("#s_anotif").checked,consecutive_timeouts:+$("#s_ato").value,loss_pct_1m:+$("#s_aloss").value,p95_ms_1m:+$("#s_ap95").value,cooldown_sec:+$("#s_acd").value},
+    curl_test:{url:$("#s_curl").value}};
+  const r=await fetch("/api/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  if(!r.ok){$("#smsg").style.color="#dc2626";$("#smsg").textContent="❌ "+((await r.json()).detail||"儲存失敗");return;}
+  $("#smsg").style.color="#16a34a";$("#smsg").textContent="✅ 已儲存，立即生效";fillSettings(await r.json());targets=await J("/api/targets");};
+$("#sreset").onclick=async()=>{if(!confirm("確定恢復為預設設定？你自訂的目標與門檻會被清除。"))return;
+  const r=await fetch("/api/settings/reset",{method:"POST"});$("#smsg").style.color="#16a34a";$("#smsg").textContent="已恢復預設";fillSettings(await r.json());targets=await J("/api/targets");};
+document.querySelector('nav button[data-t=set]').addEventListener("click",loadSettings);
 
 /* ---------- 啟動 ---------- */
 (async()=>{
