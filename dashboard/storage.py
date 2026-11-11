@@ -4,6 +4,7 @@
   • samples     每秒的原始量測結果，保留 24 小時
   • minute_agg  每分鐘的平均（平均、慢的時候、丟包），保留 90 天
   • reports     定時測試報告，一直保留到你在網頁上刪除
+使用者也可以在網頁上按「清除」提早刪掉量測資料或報告（clear_samples、clear_reports）。
 💡 為什麼要每分鐘平均一次？一天有 86,400 秒；看 7 天趨勢時，
    讀「每分鐘一筆」比讀「每秒一筆」快很多，也省空間。
 """
@@ -156,6 +157,21 @@ class Storage:
         with self._lock:
             return self._db.execute("SELECT ts, rtt FROM samples WHERE target=? AND ts>=? ORDER BY ts",
                                     (target, since_ts)).fetchall()
+
+    # ---- 清除紀錄（使用者在網頁上按「清除」時）----
+    def clear_samples(self) -> int:
+        """刪掉所有量測資料（每秒原始資料＋每分鐘平均）。回傳刪掉幾筆原始資料。"""
+        with self._lock:
+            n = self._db.execute("DELETE FROM samples").rowcount
+            self._db.execute("DELETE FROM minute_agg")
+            self._db.commit()
+            return n
+
+    def clear_reports(self) -> int:
+        with self._lock:
+            n = self._db.execute("DELETE FROM reports").rowcount
+            self._db.commit()
+            return n
 
     def close(self) -> None:
         with self._lock:

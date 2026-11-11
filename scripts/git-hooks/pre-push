@@ -1,0 +1,17 @@
+#!/bin/sh
+# 推送前最後一道檢查：要推上去的 commit 裡，只要有「作者是 AI 助理預設身分」或「帶有簽章」的，就拒絕推送。
+z=0000000000000000000000000000000000000000
+owner="$(git config netsonar.owneremail || true)"
+while read lref lsha rref rsha; do
+  [ "$lsha" = "$z" ] && continue
+  if [ "$rsha" = "$z" ] || ! git cat-file -e "$rsha" 2>/dev/null; then range="$lsha"; else range="$rsha..$lsha"; fi
+  for c in $(git rev-list "$range"); do
+    ae="$(git log -1 --format=%ae "$c")"; ce="$(git log -1 --format=%ce "$c")"
+    if [ "$ae" = "noreply@anthropic.com" ] || [ "$ce" = "noreply@anthropic.com" ]; then
+      echo "❌ commit $(git rev-parse --short "$c") 的作者／提交者是 AI 助理預設身分，已拒絕推送。" >&2; exit 1; fi
+    if [ -n "$owner" ] && { [ "$ae" != "$owner" ] || [ "$ce" != "$owner" ]; }; then
+      echo "❌ commit $(git rev-parse --short "$c") 的作者／提交者不是專案擁有者，已拒絕推送。" >&2; exit 1; fi
+    if git cat-file -p "$c" | sed '/^$/q' | grep -q '^gpgsig'; then
+      echo "❌ commit $(git rev-parse --short "$c") 帶有簽章（會在 GitHub 顯示 Unverified），已拒絕推送。請關閉 commit.gpgsign 後重建這個 commit。" >&2; exit 1; fi
+  done
+done

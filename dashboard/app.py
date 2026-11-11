@@ -7,8 +7,11 @@
   4. 即時推送：/api/stream 讓網頁每秒自動收到最新結果，不用一直重新整理。
 
 只開放給這台電腦（127.0.0.1），同一個 Wi-Fi 的其他裝置連不到。
+  5. 使用者按下的動作：儲存設定、開始定時測試、下載 CSV、清除紀錄、停止程式。
+     「清除」「停止」這類不能復原的動作，只接受儀表板自己的網頁送來、而且確認過的請求（見 _guard）。
+
 其他檔案的分工：probe.py 去 ping、stats.py 算統計、storage.py 存資料、alerts.py 發警示、
-diagnose.py／jitter.py／advice.py 把數字翻成白話建議、netenv.py 讀網路環境。
+diagnose.py／jitter.py／advice.py 把數字翻成白話建議、netenv.py 讀網路環境、export.py 把紀錄轉成 CSV。
 """
 from __future__ import annotations
 
@@ -31,6 +34,7 @@ import netenv
 import traceroute as trace_mod
 import advice as advice_mod
 import dns_info
+import export as export_mod
 import jitter as jitter_mod
 import settings as settings_mod
 import speedtest
@@ -456,6 +460,35 @@ class Engine:
         s = {n: v for n, v in self.summary(range_key).items() if n not in self.dead}
         return diagnose(s, self.router_name, self.cfg.get("diagnosis"))
 
+    CLEARABLE = ("samples", "alerts", "reports", "curl", "trace")
+
+    def clear(self, what: list) -> dict:
+        """清除紀錄。what 可包含：samples（量測資料）、alerts（警示與事件）、reports（測試報告）、
+        curl（下載測速結果）、trace（路徑分析結果）。回傳各項清掉幾筆。量測本身不會停，清完會從零開始累積。"""
+        done = {}
+        if "samples" in what:
+            done["samples"] = self.storage.clear_samples()
+            self._buf.clear()
+            for w in self.windows.values():        # 警示用的「最近 60 筆」也清掉，避免舊資料繼續觸發警示
+                w.clear()
+            self.dead = set()
+        if "alerts" in what:
+            done["alerts"] = len(self.alerts.history) + len(self.events)
+            self.alerts.history.clear()
+            self.events.clear()
+        if "reports" in what:
+            done["reports"] = self.storage.clear_reports()
+            if self.test.get("state") == "done":   # 畫面上「上次測試」的報告也一起收掉
+                self.test = {"state": "idle"}
+        if "curl" in what:
+            done["curl"] = len(self.curl_results)
+            self.curl_results.clear()
+        if "trace" in what:
+            keep = {k: v for k, v in self.trace_jobs.items() if v.get("running")}
+            done["trace"] = len(self.trace_jobs) - len(keep)
+            self.trace_jobs = keep
+        return done
+
     def summary(self, range_key: str) -> dict:
         since = int(time.time()) - RANGES[range_key]
         return {t["name"]: {**stats.summarize(self.storage.recent_rtts(t["name"], since)),
@@ -528,15 +561,39 @@ def create_app(cfg: dict | None = None, storage: Storage | None = None,
                 "log_path": str(Path.home() / "Library/Logs/NetSonar.log") if service else None,
                 "port": engine.cfg.get("port", 8765)}
 
-    @app.post("/api/quit")
-    def quit_app(body: dict, request: Request):
-        """停止 NetSonar（背景量測也會停）。
-        🔒 只接受從儀表板自己的網頁送來的請求：別的網站就算叫瀏覽器連過來，來源（Origin）不符也會被拒絕。"""
+    def _guard(body: dict, request: Request) -> None:
+        """🔒 給「停止」「清除」這類不能復原的動作用：只接受從儀表板自己的網頁送來、而且明確確認過的請求。
+        別的網站就算叫你的瀏覽器連過來，來源（Origin）不符也會被拒絕。"""
         origin = request.headers.get("origin")
         if origin and origin.split("//")[-1].split(":")[0] not in ("127.0.0.1", "localhost"):
             raise HTTPException(403, "只接受來自本機儀表板的請求")
         if body.get("confirm") is not True:
             raise HTTPException(400, "需要 confirm: true")
+
+    def _csv(text_or_iter, name: str):
+        """回傳一個「下載檔案」的回應；檔名附上日期時間，方便分辨是哪一次匯出的。"""
+        fn = f"netsonar-{name}-{time.strftime('%Y%m%d-%H%M%S')}.csv"
+        headers = {"Content-Disposition": f"attachment; filename={fn}"}
+        if isinstance(text_or_iter, str):
+            return Response(text_or_iter, media_type="text/csv; charset=utf-8", headers=headers)
+        return StreamingResponse(text_or_iter, media_type="text/csv; charset=utf-8", headers=headers)
+
+    @app.post("/api/clear")
+    def clear(body: dict, request: Request):
+        """清除紀錄。body：{"what": ["samples", ...] 或 "all", "confirm": true}。清除後無法復原。"""
+        _guard(body, request)
+        what = body.get("what")
+        what = list(Engine.CLEARABLE) if what == "all" else what
+        if not isinstance(what, list) or not what or any(w not in Engine.CLEARABLE for w in what):
+            raise HTTPException(400, f"what 必須是 all，或 {list(Engine.CLEARABLE)} 的清單")
+        if engine.test.get("state") == "running" and ("samples" in what or "reports" in what):
+            raise HTTPException(409, "定時測試進行中。請先到「定時測試」頁結束測試，再清除紀錄。")
+        return {"ok": True, "cleared": engine.clear(what)}
+
+    @app.post("/api/quit")
+    def quit_app(body: dict, request: Request):
+        """停止 NetSonar（背景量測也會停）。"""
+        _guard(body, request)
         threading.Timer(0.5, app.state.quit).start()      # 稍等一下再關，讓這個回應先送回網頁
         return {"ok": True}
 
@@ -659,16 +716,37 @@ def create_app(cfg: dict | None = None, storage: Storage | None = None,
         return {"range": range, "series": out}
 
     @app.get("/api/export.csv")
-    def export_csv(target: str, range: str = "24h", since: int | None = None, until: int | None = None):
+    def export_csv(target: str = "all", range: str = "24h", since: int | None = None, until: int | None = None):
+        """下載量測紀錄。target＝某個目標的名稱，或 all（全部目標）。每秒的原始資料最多保留 24 小時。"""
         if range not in RANGES:
             raise HTTPException(400, f"range 必須是 {list(RANGES)} 其中之一")
+        names = [t["name"] for t in engine.targets]
+        if target != "all" and target not in names:
+            raise HTTPException(404, "找不到這個目標")
         if since is None:
             since = int(time.time()) - RANGES[range]
-        until = until or 10**12
-        rows = ["ts,target,rtt_ms"] + [f"{t},{target.replace(',', ' ')},{'' if r is None else r}"
-                                       for t, r in engine.storage.raw_rows(target, since) if t <= until]
-        return Response("\n".join(rows) + "\n", media_type="text/csv; charset=utf-8",
-                        headers={"Content-Disposition": "attachment; filename=netsonar.csv"})
+        end = until or 10**12
+        chosen = names if target == "all" else [target]
+        series = ((n, [(t, r) for t, r in engine.storage.raw_rows(n, since) if t <= end]) for n in chosen)
+        return _csv(export_mod.samples_stream(series), "measurements")
+
+    @app.get("/api/alerts.csv")
+    def alerts_csv():
+        return _csv(export_mod.alerts_table(list(engine.alerts.history), list(engine.events)), "alerts")
+
+    @app.get("/api/reports.csv")
+    def reports_csv():
+        return _csv(export_mod.reports_table([_report_row(r) for r in engine.storage.list_reports()]), "reports")
+
+    @app.get("/api/curl.csv")
+    def curl_csv():
+        return _csv(export_mod.curl_table(list(engine.curl_results)), "speedtest")
+
+    @app.get("/api/traceroute.csv")
+    def traceroute_csv(id: str):
+        if id not in engine.trace_jobs:
+            raise HTTPException(404, "找不到這個分析（可能已被清除，請重新分析一次）")
+        return _csv(export_mod.trace_table(engine.trace_jobs[id]), "traceroute")
 
     @app.get("/api/test")
     def test_get():

@@ -157,7 +157,8 @@ def test_api_env_series_export_trace(tmp_path):
         assert c.get("/api/series?target=A&range=24h").status_code == 200
         assert c.get("/api/series?target=zz").status_code == 404
         csv = c.get("/api/export.csv?target=A&range=5m")
-        assert csv.text.startswith("ts,target,rtt_ms") and "A,12.0" in csv.text
+        assert csv.text.startswith("\ufeff時間,目標,延遲(ms)") and ",A,12.0" in csv.text
+        assert "attachment; filename=netsonar-measurements-" in csv.headers["content-disposition"]
         assert c.post("/api/traceroute", json={"target": "-w5"}).status_code == 400
         jid = c.post("/api/traceroute", json={"target": "1.1.1.1"}).json()["id"]
         for _ in range(20):

@@ -20,6 +20,7 @@ main{max-width:1180px;margin:0 auto;padding:18px 24px 48px} section{display:none
 .advice .ovh{font-size:15px;margin-bottom:6px}.advice .ovh small{color:var(--mute);margin-left:8px}
 .advice .sec{padding:6px 0;border-top:1px solid var(--line)}.advice .sh{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.advice .sh b{min-width:200px}.advice .ss{color:var(--ink);font-size:13px}
 .advice ul{margin:4px 0 0 26px;padding-left:16px;color:var(--mute);font-size:12px}.advice li{margin:2px 0}
+.acts{float:right;display:flex;gap:6px;align-items:center;font-weight:400}.btn.sm{font-size:12px;padding:3px 9px;text-decoration:none;color:var(--ink)}.btn.danger{color:#b91c1c;border-color:#fecaca}.btn.danger:hover{background:#fef2f2}
 .i{display:inline-block;width:14px;height:14px;line-height:14px;text-align:center;border-radius:50%;background:#e8edf3;color:#64748b;font-size:10px;cursor:help;margin-left:3px;vertical-align:1px;font-weight:400;font-style:normal}.i:hover,.i:focus{background:var(--acc);color:#fff;outline:0}
 #gtip{position:fixed;z-index:60;max-width:300px;background:#16202e;color:#fff;padding:8px 11px;border-radius:8px;font-size:12px;line-height:1.55;display:none;pointer-events:none;box-shadow:0 4px 14px #0004}
 .diag.ok{border-left-color:var(--ok)}.diag.local,.diag.upstream,.diag.target{border-left-color:var(--warn)}
@@ -56,19 +57,19 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
   <p><b>MOS（Mean Opinion Score）＝通話品質分</b>。電信業用它回答一個問題：<b>現在用這條網路打視訊或語音通話，聽起來順不順？</b>本工具用延遲、抖動、丟包換算出近似值（簡化的 ITU-T E-model），範圍 1～4.5。</p>
   <table><tr><th>MOS</th><th>白話意思</th></tr><tr><td>4.3 以上</td><td>極佳：通話幾乎感覺不到網路存在</td></tr><tr><td>4.0 – 4.3</td><td>良好：多數人不會察覺問題</td></tr><tr><td>3.6 – 4.0</td><td>尚可：偶爾有點延遲或雜音，部分人會注意到</td></tr><tr><td>3.1 – 3.6</td><td>不佳：明顯卡頓、搶話</td></tr><tr><td>3.1 以下</td><td>很差：通話困難</td></tr></table>
   <p class="hint">• MOS 對「偶爾的尖峰」比較寬容，所以它可能是「良好」、但下方的分數（嚴格版，看平均與抖動）卻是 Poor——兩者回答的問題不同：MOS＝通話順不順，分數＝整體網路穩不穩。<br>• 開 VPN 時延遲會包含繞到 VPN 伺服器的距離，分數會偏低，但 MOS 通常仍不錯。<br>• 滿分約 4.4（理想網路也到不了 4.5）。</p></details>
-<div class="panel"><h3>延遲走勢 <small class="hint">（毫秒，愈低愈好）</small><span class="i" tabindex="0" data-g="latency">ⓘ</span></h3>
+<div class="panel"><h3>延遲走勢 <small class="hint">（毫秒，愈低愈好）</small><span class="i" tabindex="0" data-g="latency">ⓘ</span><span class="acts"><a class="btn sm" id="csvlive" href="/api/export.csv?target=all&range=5m" title="下載成表格檔，可用 Excel／Numbers 打開">⬇ 下載 CSV</a><button class="btn sm danger" data-clear="samples" data-label="量測紀錄（走勢圖、歷史、各目標統計）" title="清除後無法復原">🗑 清除量測紀錄</button></span></h3>
     <div class="row" id="ranges"></div><svg id="chart" class="chart"></svg><div id="legend" class="legend"></div>
     <div class="hint">灰色虛線＝網路環境變化（VPN 開關、換 Wi-Fi 頻道等）；淡藍點線＝Wi-Fi 資訊更新（macOS 會掃描，可能造成尖峰）。1 小時以內為平均值，24 小時以上為每分鐘平均。</div></div>
   <div class="grid">
     <div class="panel"><h3>網路環境 <button class="btn" id="wifiref" style="float:right;font-size:12px" title="會觸發 macOS 掃描 Wi-Fi，可能造成短暫延遲跳動">更新 Wi-Fi 資訊</button></h3><div id="env"></div></div>
-    <div class="panel"><h3>最近警示與事件</h3><ul class="list" id="alerts"></ul></div>
+    <div class="panel"><h3>最近警示與事件<span class="acts"><a class="btn sm"  href="/api/alerts.csv" title="下載成表格檔，可用 Excel／Numbers 打開">⬇ 下載 CSV</a><button class="btn sm danger" data-clear="alerts" data-label="警示與事件紀錄" title="清除後無法復原">🗑 清除</button></span></h3><ul class="list" id="alerts"></ul></div>
   </div>
 </section>
 <section id="hist">
-  <div class="panel"><h3>歷史趨勢與匯出</h3>
+  <div class="panel"><h3>歷史趨勢與匯出<span class="acts"><button class="btn sm danger" data-clear="samples" data-label="量測紀錄（走勢圖、歷史、各目標統計）" title="清除後無法復原">🗑 清除量測紀錄</button></span></h3>
     <div class="row" id="hranges"></div><div class="row" id="hsel"></div>
     <svg id="hchart" class="chart"></svg><div class="hint" id="hnote"></div>
-    <div class="row"><a class="btn" id="csv" href="#">下載 CSV（原始資料，最多保留 24 小時）</a></div></div>
+    <div class="row"><a class="btn" id="csv" href="#">⬇ 下載這個目標的 CSV</a><a class="btn" id="csvall" href="#">⬇ 下載全部目標的 CSV</a><span class="hint">每秒一筆的原始紀錄，最多保留 24 小時；選 7 天時會下載最近 24 小時。</span></div></div>
 </section>
 <section id="test">
   <div class="panel"><h3>定時測試</h3>
@@ -77,10 +78,10 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
     <div class="hint" id="tsel"></div>
     <div id="tprog" class="hint"></div><div class="row"><button class="btn" id="tstop" style="display:none">結束並產生報告</button></div>
     <div id="treport"></div></div>
-  <div class="panel"><h3>已保存的測試報告（並排比較）</h3>
+  <div class="panel"><h3>已保存的測試報告（並排比較）<span class="acts"><a class="btn sm"  href="/api/reports.csv" title="下載成表格檔，可用 Excel／Numbers 打開">⬇ 下載 CSV</a><button class="btn sm danger" data-clear="reports" data-label="所有測試報告" title="清除後無法復原">🗑 全部清除</button></span></h3>
     <div class="hint">每次定時測試結束都會自動保存，並記下當時的連線方式、頻段、訊號。換一個條件（有線 vs Wi-Fi、2.4 vs 5 GHz、換頻道、關 AirDrop）各測一次，就能在這裡比較「哪個條件抖動最少」。一次只改一個條件，比較才有意義。</div>
     <div id="rlist"></div></div>
-  <div class="panel"><h3>下載速度測試</h3>
+  <div class="panel"><h3>下載速度測試<span class="acts"><a class="btn sm"  href="/api/curl.csv" title="下載成表格檔，可用 Excel／Numbers 打開">⬇ 下載 CSV</a><button class="btn sm danger" data-clear="curl" data-label="下載測速結果" title="清除後無法復原">🗑 清除</button></span></h3>
     <div class="row"><select id="csize" class="btn"><option value="25">25 MB</option><option value="50">50 MB</option><option value="100">100 MB</option><option value="200">200 MB</option><option value="500">500 MB</option><option value="1000">1 GB</option></select>
       <button class="btn pri" id="cgo">測一次下載速度</button><span class="hint" id="cstat"></span></div>
     <div class="hint" id="cwarn"></div>
@@ -110,13 +111,14 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
     <input type="text" id="s_curl" style="width:100%;margin-top:8px"></details>
   <div class="panel"><h3>程式健康度 <small class="hint">（分辨「網路不穩」還是「電腦太忙、量測被拖慢」）</small></h3><div id="ehealth" class="hint">讀取中…</div></div>
   <div class="panel"><h3>關於這個程式</h3><div id="about" class="hint">讀取中…</div>
-    <div class="row" style="margin-top:8px"><button class="btn" id="quit">⏻ 停止 NetSonar</button></div>
+    <div class="row" style="margin-top:8px"><button class="btn" id="quit">⏻ 停止 NetSonar</button><button class="btn danger" data-clear="all" data-label="所有紀錄（量測、警示與事件、測試報告、下載測速、路徑分析）">🗑 清除所有紀錄</button></div>
+    <div class="hint">換到不同的環境測試（例如換了路由器、搬到別的地方）之前，可以先「清除所有紀錄」，新舊資料才不會混在一起。你的設定（監測目標、警示門檻）不會被清除。</div>
     <div class="hint">關掉瀏覽器<b>不會</b>停止量測，NetSonar 會繼續在背景記錄並在網路變差時通知你。按上面的按鈕才會真的停止；之後打開「應用程式」裡的 NetSonar（或下次登入電腦）就會再啟動。想完全移除請雙擊 <code>解除安裝.command</code>。</div></div>
   <div class="row"><button class="btn pri" id="ssave">儲存設定</button><button class="btn" id="sreset">恢復預設</button><span id="smsg" class="hint"></span></div>
   <div class="hint">設定會保存在這台電腦，更新程式時不會被覆蓋。按「恢復預設」可回到原廠設定。</div>
 </section>
 <section id="trace">
-  <div class="panel"><h3>路徑分析（Traceroute）</h3>
+  <div class="panel"><h3>路徑分析（Traceroute）<span class="acts"><a class="btn sm" id="tcsv" href="#" style="display:none" title="下載成表格檔，可用 Excel／Numbers 打開">⬇ 下載 CSV</a><button class="btn sm danger" data-clear="trace" data-label="路徑分析結果" title="清除後無法復原">🗑 清除</button></span></h3>
     <div class="row"><input type="text" id="thost" value="1.1.1.1" aria-label="目標"><button class="btn pri" id="tgo">開始分析</button><span class="hint" id="tstat"></span></div>
     <div id="tres"></div>
     <div class="hint">列出資料從你家到目標，一路經過的每一站和各站的延遲（約需 10～30 秒）。<br>「—」代表那一站不回應，很常見，不代表有問題。要注意的是：延遲從某一站開始變高，而且之後每一站都一直很高，問題多半就在那一站附近。只有單獨一站特別高、後面又恢復正常，通常不用擔心。</div></div>
@@ -232,6 +234,7 @@ async function seriesFor(name,r){
   return d.points.map(p=>p.minute!==undefined?{t:p.minute,v:p.avg,loss:p.count?+(p.lost/p.count*100).toFixed(1):0}:{t:p.ts,v:p.avg,loss:p.loss_pct});
 }
 async function drawLive(){
+  $("#csvlive").href=`/api/export.csv?target=all&range=${range==="7d"?"24h":range}`;
   const [ev,all]=await Promise.all([J("/api/events"),J(`/api/series_all?range=${range}`)]);
   const conv=pts=>pts.map(p=>p.minute!==undefined?{t:p.minute,v:p.avg,loss:p.count?+(p.lost/p.count*100).toFixed(1):0}:{t:p.ts,v:p.avg,loss:p.loss_pct});
   const names=targets.map(t=>t.name).filter(n=>shown[n]!==false&&!deadNames.has(n));
@@ -248,6 +251,7 @@ async function drawHist(){
   plot($("#hchart"),[{name:htarget,pts:s,color:COL[0]}],ev);
   $("#hnote").textContent=hrange==="7d"||hrange==="24h"?"此範圍使用「每分鐘平均」，所以短暫尖峰會被平均掉；要看尖峰請用 1 小時以內。":"";
   $("#csv").href=`/api/export.csv?target=${encodeURIComponent(htarget)}&range=${hrange==="7d"?"24h":hrange}`;
+  $("#csvall").href=`/api/export.csv?target=all&range=${hrange==="7d"?"24h":hrange}`;
 }
 
 /* ---------- 即時：卡片 / 判讀 / 環境 ---------- */
@@ -296,12 +300,15 @@ async function side(){
 
 $("#wifiref").onclick=async()=>{await fetch("/api/wifi/refresh",{method:"POST"});$("#wifiref").textContent="更新中…";setTimeout(()=>{$("#wifiref").textContent="更新 Wi-Fi 資訊";side();},9000);};
 /* ---------- 路徑分析 ---------- */
+let traceId=null;
 $("#tgo").onclick=async()=>{
   $("#tres").innerHTML="";$("#tstat").textContent="啟動中…";
   const r=await fetch("/api/traceroute",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({target:$("#thost").value.trim()})});
   if(!r.ok){$("#tstat").textContent=(await r.json()).detail||"失敗";return;}
   const {id}=await r.json();
-  for(;;){const j=await J("/api/traceroute/"+id);renderTrace(j);if(!j.running)break;await new Promise(r=>setTimeout(r,1000));}
+  $("#tcsv").style.display="none";traceId=id;
+  for(;;){if(traceId!==id)return;   // 中途被「清除」了
+    const j=await J("/api/traceroute/"+id);renderTrace(j);if(!j.running){$("#tcsv").href="/api/traceroute.csv?id="+encodeURIComponent(id);$("#tcsv").style.display="";break;}await new Promise(r=>setTimeout(r,1000));}
 };
 function renderTrace(j){
   $("#tstat").textContent=j.running?"分析中…（約 10–30 秒）":"完成";
@@ -362,6 +369,21 @@ async function loadReports(){try{const L=await J("/api/reports");
 }catch(e){}}
 setInterval(loadReports,15000);loadReports();
 
+
+/* ---------- 清除紀錄（每個有紀錄的區塊都有一顆；設定頁有「清除所有紀錄」） ---------- */
+const afterClear={
+  samples:()=>{drawLive().catch(()=>{});side();if($("#hist").classList.contains("on"))drawHist();},
+  alerts:()=>side(),
+  reports:()=>{$("#treport").innerHTML="";delete $("#treport").dataset.k;loadReports();pollTest();},
+  curl:()=>loadCurl(),
+  trace:()=>{traceId=null;$("#tres").innerHTML="";$("#tstat").textContent="";$("#tcsv").style.display="none";}};
+document.querySelectorAll("[data-clear]").forEach(b=>b.onclick=async()=>{
+  const what=b.dataset.clear;
+  if(!confirm(`確定要清除「${b.dataset.label}」嗎？\n\n清除後無法復原。之後還想看的話，請先按「下載 CSV」保存。`))return;
+  try{const r=await fetch("/api/clear",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({what:what==="all"?"all":[what],confirm:true})});
+    if(!r.ok){alert((await r.json()).detail);return;}}catch(e){alert("清除失敗：連不到 NetSonar。");return;}
+  (what==="all"?Object.keys(afterClear):[what]).forEach(k=>afterClear[k]());
+  if(what==="all")alert("已清除所有紀錄。量測會從現在重新開始累積。");});
 
 /* ---------- 設定 ---------- */
 let sTargets=[],dragFrom=null;

@@ -119,22 +119,33 @@
 | 網址 | 內容 |
 |---|---|
 | `/api/advice` | 整體網路建議 |
+| `/api/targets`、`/api/latest` | 目前的監測目標清單、最新一次的量測結果 |
 | `/api/summary?range=5m` | 各目標的統計（範圍可選 5m、1h、24h、7d） |
+| `/api/history` | 單一目標的每分鐘平均（長時間趨勢） |
 | `/api/diagnosis` | 問題出在哪一段 |
 | `/api/jitter` | 延遲尖峰分析 |
 | `/api/env` | 網路環境、Wi-Fi、DNS 服務商 |
+| `/api/wifi/refresh` | 立刻重新讀取 Wi-Fi 詳細資訊 |
 | `/api/series_all?range=5m` | 走勢圖資料 |
 | `/api/alerts`、`/api/events` | 最近的警示、網路環境變化 |
 | `/api/test`、`/api/test/start`、`/api/test/stop` | 定時測試 |
 | `/api/reports` | 已保存的測試報告（可改名、刪除） |
 | `/api/curl` | 下載測速 |
 | `/api/traceroute` | 路徑分析 |
-| `/api/settings` | 讀取／儲存設定 |
+| `/api/settings`、`/api/settings/reset` | 讀取／儲存設定、恢復預設 |
 | `/api/health` | 程式健康度 |
 | `/api/about` | 執行方式、資料與設定存放位置 |
 | `/api/quit` | 停止 NetSonar |
-| `/api/export.csv` | 下載原始資料 |
+| `/api/export.csv` | 下載量測紀錄（`target=all` 或某個目標） |
+| `/api/alerts.csv`、`/api/reports.csv`、`/api/curl.csv`、`/api/traceroute.csv` | 下載警示與事件、測試報告比較表、測速結果、路徑分析結果 |
+| `/api/clear` | 清除紀錄（量測、警示與事件、報告、測速、路徑分析，或全部） |
 | `/api/stream` | 每秒推送最新結果（SSE） |
+
+---
+
+**CSV 的格式**（`export.py`）：欄位名稱用中文；檔案開頭加 BOM，Excel 才不會把中文顯示成亂碼；文字欄位若以 `= + - @` 開頭會補一個單引號，避免被試算表當成公式執行。
+
+**不能復原的動作**（`/api/clear`、`/api/quit`）有兩道保護：請求裡要帶 `confirm: true`，而且來源必須是儀表板自己的網頁。清除量測資料時，警示用的「最近 60 筆」也會一起清空，避免舊資料繼續觸發警示；定時測試進行中不能清除量測資料與報告。
 
 ---
 
@@ -149,6 +160,15 @@ cd tests
 ```
 
 真正的 ping、Wi-Fi 資訊、系統通知、背景服務，只能在 Mac 上實際操作驗證。
+
+### 文件有沒有跟上程式？（自動檢查）
+
+`tests/test_docs.py` 每次跑測試都會檢查：每個 `/api` 網址都有列在本文件、每支程式開頭都有白話說明、README 涵蓋每個分頁、
+程式會連到的每個外部網站都寫進 README 的隱私說明、畫面上每個 ⓘ 都有對應的名詞解釋、README 的連結沒有壞掉。
+
+另外，`scripts/git-hooks/` 有兩個 commit／push 前的檢查（啟用：`git config core.hooksPath scripts/git-hooks`）：
+改了程式卻沒更新任何文件會被擋下；作者是 AI 助理的預設身分、或 commit 帶有簽章（會在 GitHub 顯示 Unverified）也會被擋下。
+AI 助理的完整協作守則在 [`CLAUDE.md`](../CLAUDE.md)。
 
 ---
 
@@ -169,10 +189,12 @@ dashboard/
 ├── alerts.py       警示與 macOS 通知
 ├── storage.py      資料庫
 ├── settings.py     設定頁的檢查與儲存
+├── export.py       把紀錄轉成 CSV
 ├── speedtest.py    下載測速
 ├── traceroute.py   路徑分析
 ├── config.json     預設設定
 ├── requirements.txt 需要的套件與版本
 └── web/            網頁（index.html、icon.svg）
-scripts/netsonar_service.sh   安裝／移除背景服務
+scripts/netsonar_service.sh   安裝／移除／啟動／停止背景服務，並建立「應用程式」裡的圖示
+scripts/git-hooks/            commit／push 前的自動檢查（開發用）
 ```

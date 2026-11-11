@@ -1,0 +1,27 @@
+#!/bin/sh
+# 每次 commit 前自動檢查（啟用方式：git config core.hooksPath scripts/git-hooks）。
+#  ① 作者不可以是 AI 助理的預設身分（曾發生過：整排 commit 的作者都變成 Claude）
+#  ② 不可以開著「自動簽章」（沙盒的簽章金鑰沒登記在擁有者的 GitHub，會被標成 Unverified）
+#  ③ 改了程式或畫面，卻沒有更新任何說明文件 → 先擋下來提醒
+owner="$(git config netsonar.owneremail || true)"
+for v in GIT_AUTHOR_IDENT GIT_COMMITTER_IDENT; do
+  id="$(git var $v)"
+  case "$id" in *"<noreply@anthropic.com>"*)
+    echo "❌ $v 是 AI 助理的預設身分（$id）。請先把 git user.name / user.email 設成專案擁有者。" >&2; exit 1 ;;
+  esac
+  if [ -n "$owner" ]; then
+    case "$id" in *"<$owner>"*) ;; *) echo "❌ $v 不是專案擁有者 <$owner>（目前：$id）。" >&2; exit 1 ;; esac
+  fi
+done
+if [ "$(git config --bool commit.gpgsign || echo false)" = "true" ]; then
+  echo "❌ 這個環境開著自動簽章，commit 會在 GitHub 顯示 Unverified。請執行：git config commit.gpgsign false" >&2; exit 1
+fi
+changed="$(git diff --cached --name-only)"
+code="$(echo "$changed" | grep -E '^(dashboard/|scripts/|net_probe\.sh|run_dashboard\.sh|.*\.command$)' | grep -v '^scripts/git-hooks/' || true)"
+docs="$(echo "$changed" | grep -E '^(README\.md|CHANGELOG\.md|docs/)' || true)"
+if [ -n "$code" ] && [ -z "$docs" ] && [ "${SKIP_DOC_CHECK:-0}" != "1" ]; then
+  echo "❌ 這次改了程式或畫面，但 README／CHANGELOG／docs 都沒有更新：" >&2
+  echo "$code" | sed 's/^/     /' >&2
+  echo "   請重讀並更新相關說明與註解（至少在 CHANGELOG 記一筆）。確定不需要時：SKIP_DOC_CHECK=1 git commit ..." >&2
+  exit 1
+fi
