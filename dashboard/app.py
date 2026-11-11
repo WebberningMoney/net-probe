@@ -85,7 +85,8 @@ class Engine:
         # 每個目標各自獨立量測（見 _target_loop）；結果先放進緩衝區，每秒統一寫入資料庫
         self._buf: list = []
         self._tasks: dict = {}
-        self.metrics = {"overhead": deque(maxlen=300), "lag": deque(maxlen=120), "slow": 0, "pings": 0}
+        self.metrics = {"overhead": deque(maxlen=300), "lag": deque(maxlen=120), "hung": 0, "pings": 0}
+        self.dead: set = set()             # 長期完全不回應 ping 的目標（多半是該位址擋 ICMP）
         self.trace_lines = None            # 測試時可注入假的 traceroute 輸出
         self.trace_jobs: dict = {}         # job_id → 路徑分析進度
 
@@ -186,8 +187,8 @@ class Engine:
         m["pings"] += 1
         if rtt is not None:
             m["overhead"].append(max(0.0, wall_ms - rtt))     # 啟動 ping 程式、讀取輸出的額外耗時
-        elif wall_ms > timeout * 1000 + 500:
-            m["slow"] += 1                                    # 逾時卻拖了很久 → 本機可能卡住
+        elif wall_ms > timeout * 1000 + 900:
+            m["hung"] += 1      # ping 沒有在逾時後自己結束、是被 -t 強制收掉的（目標不回應時偶爾發生）
 
     async def _target_loop(self, name: str, offset: float) -> None:
         await asyncio.sleep(offset)
@@ -228,7 +229,15 @@ class Engine:
             self.windows.setdefault(n, deque(maxlen=60)).append(v)
             results[n] = v
         ts = int(time.time())
-        new_alerts = self.alerts.evaluate({n: list(w) for n, w in self.windows.items()}, ts)
+        self._update_unreachable()
+        # 警示對象：排除「已標記無回應」以及「整個視窗（≥5 筆）從沒回應過、而其他目標正常」的目標，
+        # 避免剛啟動或剛新增一個擋 ICMP 的位址時，在判定成「無回應」之前先吵一輪通知
+        ext = [n for n in self.windows if n != self.router_name]
+        others_alive = lambda me: any(any(v is not None for v in list(self.windows[n])[-10:]) for n in ext if n != me)
+        quiet = {n for n, w in self.windows.items() if n != self.router_name and len(w) >= 5
+                 and all(v is None for v in w) and others_alive(n)}
+        new_alerts = self.alerts.evaluate(
+            {n: list(w) for n, w in self.windows.items() if n not in self.dead and n not in quiet}, ts)
         self.latest = {"ts": ts, "results": results, "alerts": new_alerts}
         t = self.test
         if t["state"] == "running" and t["ends_at"] and ts >= t["ends_at"]:
@@ -243,6 +252,26 @@ class Engine:
             await asyncio.to_thread(self.storage.purge, ts, ret.get("raw_hours", 24),
                                     ret.get("minute_days", 90))
         return self.latest
+
+    def _update_unreachable(self) -> None:
+        """偵測「長期完全不回應」的目標：最近 30 筆全逾時，而其他外部目標最近仍有回應。
+        這種目標多半是該位址（或你的 VPN）擋掉 ICMP，不是網路故障 → 暫停對它的警示與判讀，卡片標示「無回應」。
+        只要它回應一次就恢復。若所有目標都逾時（真的斷線），不會被當成「不回應的目標」。"""
+        ext = [t["name"] for t in self.targets if t["name"] != self.router_name]
+        recent = {n: list(self.windows.get(n, [])) for n in ext}
+        alive = any(any(v is not None for v in w[-10:]) for w in recent.values())
+        new = set()
+        for n, w in recent.items():
+            if alive and len(w) >= 30 and all(v is None for v in w[-30:]):
+                new.add(n)
+            elif n in self.dead and w and w[-1] is None:
+                new.add(n)                                    # 已標記的，要等到回應一次才解除
+        now = int(time.time())
+        for n in new - self.dead:
+            self.events.append({"ts": now, "text": f"{n} 持續不回應 ping（其他目標正常），已暫停對它的警示與判讀"})
+        for n in self.dead - new:
+            self.events.append({"ts": now, "text": f"{n} 恢復回應"})
+        self.dead = new
 
     async def tick(self) -> dict:
         """（測試用）同步做一輪：所有目標同時 ping 一次，再彙總。正式執行改用各目標獨立迴圈。"""
@@ -282,8 +311,11 @@ class Engine:
             return round(v[min(len(v) - 1, int(len(v) * p))], 1) if v else None
         m = self.metrics
         oh, lag = list(m["overhead"]), list(m["lag"])
-        busy = bool((pct(oh, .95) or 0) > 150 or (pct(lag, .95) or 0) > 300 or m["slow"] > 3)
-        return {"ok": not busy, "pings": m["pings"], "slow_pings": m["slow"],
+        # 本機忙＝額外耗時或排程延遲偏高；「被強制收掉」只在占比很高（>10%）時才算，
+        # 因為目標不回應（例如 VPN 擋 ICMP）時偶爾也會發生，不代表電腦忙
+        busy = bool((pct(oh, .95) or 0) > 150 or (pct(lag, .95) or 0) > 300
+                    or m["hung"] > max(5, 0.1 * m["pings"]))
+        return {"ok": not busy, "pings": m["pings"], "hung_pings": m["hung"],
                 "overhead_ms": {"p50": pct(oh, .5), "p95": pct(oh, .95), "max": round(max(oh), 1) if oh else None},
                 "loop_lag_ms": {"p50": pct(lag, .5), "p95": pct(lag, .95), "max": round(max(lag), 1) if lag else None},
                 "targets": len(self.targets), "interval_sec": self.cfg.get("interval_sec", 1.0)}
@@ -307,7 +339,7 @@ class Engine:
     def report(self, since: int, until: int) -> dict:
         targets = {t["name"]: stats.summarize([r for ts, r in self.storage.raw_rows(t["name"], since) if ts <= until])
                    for t in self.targets}
-        d = diagnose(targets, self.router_name, self.cfg.get("diagnosis"))
+        d = diagnose({n: s for n, s in targets.items() if n not in self.dead}, self.router_name, self.cfg.get("diagnosis"))
         return {"since": since, "until": until, "seconds": until - since, "targets": targets,
                 "diagnosis": d, "alerts": [a for a in self.alerts.history if since <= a["ts"] <= until],
                 "events": [e for e in self.events if since <= e["ts"] <= until],
@@ -327,11 +359,13 @@ class Engine:
         return res
 
     def diagnosis(self, range_key: str = "5m") -> dict:
-        return diagnose(self.summary(range_key), self.router_name, self.cfg.get("diagnosis"))
+        s = {n: v for n, v in self.summary(range_key).items() if n not in self.dead}
+        return diagnose(s, self.router_name, self.cfg.get("diagnosis"))
 
     def summary(self, range_key: str) -> dict:
         since = int(time.time()) - RANGES[range_key]
-        return {t["name"]: stats.summarize(self.storage.recent_rtts(t["name"], since))
+        return {t["name"]: {**stats.summarize(self.storage.recent_rtts(t["name"], since)),
+                            "unreachable": t["name"] in self.dead}
                 for t in self.targets}
 
 

@@ -19,7 +19,7 @@ main{max-width:1180px;margin:0 auto;padding:18px 24px 48px} section{display:none
 .diag small{color:var(--mute)}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;border-top:4px solid var(--mute)}
-.card.Excellent,.card.Good{border-top-color:var(--ok)}.card.Moderate{border-top-color:var(--warn)}.card.Poor{border-top-color:var(--bad)}
+.card.Excellent,.card.Good{border-top-color:var(--ok)}.card.Moderate{border-top-color:var(--warn)}.card.Poor{border-top-color:var(--bad)}.card.dead{border-top-color:#94a3b8;background:#f8fafc}.card.dead .big{color:var(--mute);font-size:22px;line-height:40px}.deadnote{font-size:11px;color:var(--mute);margin-top:6px}
 .card h4{margin:0 0 4px;font-size:13px;color:var(--mute);display:flex;justify-content:space-between}
 .card .big{font-size:30px;font-weight:600}.card .big.to{color:var(--bad)} .card .big small{font-size:13px;color:var(--mute);font-weight:400}
 .card dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:8px 0 0;color:var(--mute);font-size:12px} .card dd{margin:0;text-align:right;color:var(--ink)}
@@ -34,7 +34,7 @@ td.k{color:var(--mute);width:38%} .mask{cursor:pointer;color:var(--acc);margin-l
 ul.list{margin:0;padding-left:18px} ul.list li{margin:3px 0} small.m{color:var(--mute)} .hint{color:var(--mute);font-size:12px}
 input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:14px;width:240px}
 .hop.high td{background:#fef2f2}.hop.none td{color:var(--mute)}
-.form{display:grid;gap:10px}.form label{display:flex;gap:8px;align-items:center}.form input[type=number]{width:80px;border:1px solid var(--line);border-radius:8px;padding:5px 8px}#stargets input{width:100%}#stargets .btn{white-space:nowrap}code{background:#eef2f6;padding:1px 5px;border-radius:4px}</style>
+.form{display:grid;gap:10px}.form label{display:flex;gap:8px;align-items:center}.form input[type=number]{width:80px;border:1px solid var(--line);border-radius:8px;padding:5px 8px}#stargets input{width:100%}#stargets .btn{white-space:nowrap}#stargets .handle{cursor:grab;color:var(--mute);text-align:center;user-select:none;font-size:18px}#stargets tr.dragging{opacity:.4}#stargets tr.dropmark td{border-top:2px solid var(--acc)}code{background:#eef2f6;padding:1px 5px;border-radius:4px}</style>
 </head>
 <body>
 <header><img src="/icon.svg" alt=""><div><b>NetSonar</b> <small>網路聲納</small></div>
@@ -78,7 +78,7 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
 </section>
 <section id="set">
   <div class="panel"><h3>監測目標</h3>
-    <div class="hint">要 ping 誰。可用 ↑↓ 調整順序（儀表板的卡片、圖例、報告都照這個順序）。新增或修改後按下方「儲存設定」立即生效，不必重新啟動。最多 8 個。</div>
+    <div class="hint">要 ping 誰。按住最左邊的「⠿」上下拖曳即可調整順序（也可用 ↑↓ 按鈕），儀表板的卡片、圖例、報告都照這個順序。新增或修改後按下方「儲存設定」立即生效，不必重新啟動。最多 8 個。</div>
     <table id="stargets"></table><div class="row"><button class="btn" id="sadd">＋ 新增目標</button></div></div>
   <div class="panel"><h3>測量</h3><div class="form">
     <label>測量間隔（秒）<input type="number" id="s_interval" step="0.5" min="0.5" max="10"></label>
@@ -112,7 +112,7 @@ const RN={"5m":"5 分鐘","1h":"1 小時","24h":"24 小時","7d":"7 天"}, esc=s
 const J=async u=>{const r=await fetch(u);if(!r.ok)throw new Error(r.status);return r.json()};
 const fmt=v=>v==null?"—":(+v).toFixed(v>=100?0:1), tm=t=>new Date(t*1000).toLocaleTimeString("zh-TW",{hour12:false});
 const mosTip="MOS＝通話品質分（1–4.5）：4.3+極佳、4.0+良好、3.6+尚可、3.1 以下很差";
-let latest={}, range="5m", hrange="1h", htarget=null, targets=[], shown={};
+let deadNames=new Set(), latest={}, range="5m", hrange="1h", htarget=null, targets=[], shown={};
 
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll("nav button,section").forEach(e=>e.classList.remove("on"));
@@ -146,9 +146,9 @@ async function seriesFor(name,r){
 async function drawLive(){
   const [ev,all]=await Promise.all([J("/api/events"),J(`/api/series_all?range=${range}`)]);
   const conv=pts=>pts.map(p=>p.minute!==undefined?{t:p.minute,v:p.avg,loss:p.count?+(p.lost/p.count*100).toFixed(1):0}:{t:p.ts,v:p.avg,loss:p.loss_pct});
-  const names=targets.map(t=>t.name).filter(n=>shown[n]!==false);
+  const names=targets.map(t=>t.name).filter(n=>shown[n]!==false&&!deadNames.has(n));
   plot($("#chart"),names.map(n=>({pts:conv(all.series[n]||[]),color:COL[targets.findIndex(t=>t.name===n)%COL.length]})),ev);
-  $("#legend").innerHTML=targets.map((t,i)=>`<label style="cursor:pointer"><input type="checkbox" data-n="${esc(t.name)}" ${shown[t.name]!==false?"checked":""}> <i style="background:${COL[i%COL.length]}"></i>${esc(t.name)}</label>`).join("")+`<span><i style="background:#dc2626;border-radius:50%"></i>有丟包</span>`;
+  $("#legend").innerHTML=targets.map((t,i)=>`<label style="cursor:pointer"><input type="checkbox" data-n="${esc(t.name)}" ${shown[t.name]!==false?"checked":""}> <i style="background:${COL[i%COL.length]}"></i>${esc(t.name)}${deadNames.has(t.name)?" <small>(無回應，已不繪圖)</small>":""}</label>`).join("")+`<span><i style="background:#dc2626;border-radius:50%"></i>有丟包</span>`;
   $("#legend").querySelectorAll("input").forEach(c=>c.onchange=()=>{shown[c.dataset.n]=c.checked;drawLive();});
 }
 async function drawHist(){
@@ -164,7 +164,9 @@ async function drawHist(){
 
 /* ---------- 即時：卡片 / 判讀 / 環境 ---------- */
 function cards(sum){
+  deadNames=new Set(Object.entries(sum).filter(([n,v])=>v.unreachable).map(([n])=>n));
   $("#cards").innerHTML=targets.map(t=>{const s=sum[t.name]||{},cur=latest[t.name],to=cur===null;
+    if(s.unreachable)return `<div class="card dead"><h4><span>${esc(t.name)}</span><span>—</span></h4><div class="big">無回應</div><div class="deadnote">這個位址持續不回應 ping，但其他目標正常（開 VPN 時常見）。已暫停對它的警示與判讀；可到「設定」頁刪除。</div></div>`;
     return `<div class="card ${s.grade||""}"><h4><span>${esc(t.name)}</span><span title="${mosTip}">MOS ${fmt(s.mos)}</span></h4>
     <div class="big ${to?"to":""}">${cur===undefined?"—":to?"逾時":fmt(cur)}<small> ${cur>=0&&cur!==null?"ms":""}</small></div>
     <dl><dt>平均 / p95</dt><dd>${fmt(s.avg)} / ${fmt(s.p95)}</dd><dt>抖動</dt><dd>${fmt(s.jitter)}</dd><dt>丟包</dt><dd>${s.loss_pct??"—"}%</dd><dt>分數</dt><dd>${fmt(s.score)} ${s.grade||""}</dd></dl></div>`;}).join("");
@@ -257,11 +259,20 @@ setInterval(pollTest,2000);pollTest();loadCurl();
 
 
 /* ---------- 設定 ---------- */
-let sTargets=[];
+let sTargets=[],dragFrom=null;
 function drawTargets(){
-  $("#stargets").innerHTML=`<tr><th style="width:30%">名稱</th><th>位址（網址或 IP）</th><th style="width:170px">順序／刪除</th></tr>`+sTargets.map((t,i)=>
-    `<tr><td><input type="text" data-i="${i}" data-f="name" value="${esc(t.name)}"></td><td><input type="text" data-i="${i}" data-f="host" value="${esc(t.host)}"></td><td style="white-space:nowrap"><button class="btn" data-up="${i}" ${i===0?"disabled":""} title="往上移">↑</button> <button class="btn" data-dn="${i}" ${i===sTargets.length-1?"disabled":""} title="往下移">↓</button> <button class="btn" data-del="${i}" ${sTargets.length<=1?"disabled":""}>刪除</button></td></tr>`).join("");
+  $("#stargets").innerHTML=`<tr><th style="width:34px"></th><th style="width:30%">名稱</th><th>位址（網址或 IP）</th><th style="width:170px">順序／刪除</th></tr>`+sTargets.map((t,i)=>
+    `<tr data-row="${i}"><td class="handle" title="按住拖曳，調整順序">⠿</td><td><input type="text" data-i="${i}" data-f="name" value="${esc(t.name)}"></td><td><input type="text" data-i="${i}" data-f="host" value="${esc(t.host)}"></td><td style="white-space:nowrap"><button class="btn" data-up="${i}" ${i===0?"disabled":""} title="往上移">↑</button> <button class="btn" data-dn="${i}" ${i===sTargets.length-1?"disabled":""} title="往下移">↓</button> <button class="btn" data-del="${i}" ${sTargets.length<=1?"disabled":""}>刪除</button></td></tr>`).join("");
   $("#stargets").querySelectorAll("input").forEach(e=>e.oninput=()=>{sTargets[+e.dataset.i][e.dataset.f]=e.value;});
+  $("#stargets").querySelectorAll("tr[data-row]").forEach(tr=>{          // 拖拉排序（HTML5 Drag & Drop）
+    const i=+tr.dataset.row,h=tr.querySelector(".handle");
+    h.onmousedown=()=>{tr.draggable=true;};h.onmouseup=()=>{tr.draggable=false;};   // 只有抓「⠿」才會拖，輸入框仍可正常選字
+    tr.ondragstart=e=>{dragFrom=i;tr.classList.add("dragging");e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain",String(i));};
+    tr.ondragend=()=>{tr.draggable=false;tr.classList.remove("dragging");document.querySelectorAll(".dropmark").forEach(x=>x.classList.remove("dropmark"));};
+    tr.ondragover=e=>{e.preventDefault();tr.classList.add("dropmark");};
+    tr.ondragleave=()=>tr.classList.remove("dropmark");
+    tr.ondrop=e=>{e.preventDefault();if(dragFrom===null||dragFrom===i)return;const [m]=sTargets.splice(dragFrom,1);sTargets.splice(i,0,m);dragFrom=null;drawTargets();};
+  });
   const mv=(i,d)=>{[sTargets[i],sTargets[i+d]]=[sTargets[i+d],sTargets[i]];drawTargets();};
   $("#stargets").querySelectorAll("[data-up]").forEach(b=>b.onclick=()=>mv(+b.dataset.up,-1));
   $("#stargets").querySelectorAll("[data-dn]").forEach(b=>b.onclick=()=>mv(+b.dataset.dn,1));
@@ -281,7 +292,7 @@ async function loadHealth(){try{const h=(await J("/api/health")).engine,f=v=>v==
   $("#ehealth").innerHTML=`<b style="color:${h.ok?"#16a34a":"#dc2626"}">${h.ok?"✅ 正常：本程式沒有被拖慢，逾時多半是網路本身的問題":"⚠️ 本機偏忙：量測可能受影響（關閉其他吃資源的程式，或減少目標／加大間隔）"}</b><br>
   每次 ping 的額外耗時（啟動 ping、讀輸出）：中位 ${f(h.overhead_ms.p50)}、p95 ${f(h.overhead_ms.p95)}、最高 ${f(h.overhead_ms.max)}（正常通常 &lt; 50 ms）<br>
   程式排程延遲：中位 ${f(h.loop_lag_ms.p50)}、p95 ${f(h.loop_lag_ms.p95)}、最高 ${f(h.loop_lag_ms.max)}（正常 &lt; 100 ms）<br>
-  已量測 ${h.pings} 次，其中「逾時卻拖很久」${h.slow_pings} 次（愈接近 0 愈好）；目前 ${h.targets} 個目標、每 ${h.interval_sec} 秒一次。`;}catch(e){}}
+  已量測 ${h.pings} 次，其中「ping 被強制結束」${h.hung_pings} 次（目標不回應時偶爾會發生，占比不高就不用擔心）；目前 ${h.targets} 個目標、每 ${h.interval_sec} 秒一次。`;}catch(e){}}
 async function loadSettings(){try{fillSettings(await J("/api/settings"));}catch(e){}loadHealth();}
 $("#ssave").onclick=async()=>{
   const body={targets:sTargets,interval_sec:+$("#s_interval").value,ping_timeout_sec:+$("#s_timeout").value,

@@ -297,3 +297,44 @@ def test_staggered_start_and_target_removal(tmp_path):
     offs = sorted(round(v - t0, 1) for v in first.values())
     assert offs == [0.0, 0.2, 0.5, 0.8] or (offs[-1] - offs[0]) >= 0.6      # 錯開起跑
     assert set(eng._tasks) <= {"T0", "T1"} or not eng._tasks
+
+
+def test_unreachable_target_is_marked_and_excluded(tmp_path):
+    from app import Engine
+    cfg = {**CFG, "targets": [{"name": "OK", "host": "1.1.1.1"}, {"name": "DEADY", "host": "9.9.9.9"}],
+           "gateway": {"enabled": False}, "alerts": {"macos_notification": False, "enabled": True}}
+    state = {"dead_ok": False}
+
+    async def run(cmd):
+        if cmd[-1] == "9.9.9.9" and not state["dead_ok"]:
+            return 2, ""
+        return 0, "64 bytes from x: icmp_seq=0 ttl=57 time=10.0 ms"
+
+    async def go():
+        eng = Engine(cfg, Storage(str(tmp_path / "d.db")), run)
+        for _ in range(31):
+            await eng.tick()
+        assert eng.dead == {"DEADY"}
+        s = eng.summary("5m")
+        assert s["DEADY"]["unreachable"] and not s["OK"]["unreachable"]
+        assert any("持續不回應" in e["text"] for e in eng.events)
+        assert "DEADY" not in " ".join(a["message"] for a in eng.alerts.history)   # 不對它發警示
+        state["dead_ok"] = True
+        await eng.tick()
+        assert not eng.dead and any("恢復回應" in e["text"] for e in eng.events)
+    asyncio.run(go())
+
+
+def test_total_outage_is_not_marked_unreachable(tmp_path):
+    from app import Engine
+    cfg = {**CFG, "targets": [{"name": "A", "host": "1.1.1.1"}, {"name": "B", "host": "9.9.9.9"}], "gateway": {"enabled": False}}
+
+    async def run(cmd):
+        return 2, ""
+
+    async def go():
+        eng = Engine(cfg, Storage(str(tmp_path / "o.db")), run)
+        for _ in range(35):
+            await eng.tick()
+        assert eng.dead == set()
+    asyncio.run(go())
