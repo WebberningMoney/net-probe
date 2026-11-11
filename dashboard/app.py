@@ -68,7 +68,7 @@ class Engine:
         self.gateway_ip = None
         self._last_gw_check = -10**9
         self.windows: dict = {}            # 每個目標最近 60 筆結果（給告警用，免查資料庫）
-        self.alerts = AlertManager(cfg.get("alerts"), self.router_name, notifier)
+        self.alerts = AlertManager(cfg.get("alerts"), self.router_name, notifier, self._per_target(cfg))
         self.loop = None                   # 伺服器的 event loop（關閉時要用）
         # 網路環境（連線類型、VPN、Wi-Fi…）與「環境變更事件」
         self.env: dict = {}
@@ -111,7 +111,7 @@ class Engine:
         self.public_lookup = cfg.get("public_ip_lookup", True)
         self.wifi_refresh = cfg.get("wifi_refresh_sec", 300)
         history = self.alerts.history
-        self.alerts = AlertManager(cfg.get("alerts"), self.router_name, self._notifier)
+        self.alerts = AlertManager(cfg.get("alerts"), self.router_name, self._notifier, self._per_target(cfg))
         self.alerts.history = history
         keep = {t["name"] for t in self.targets} | {t["name"] for t in cfg["targets"]}
         for n in list(self.windows):
@@ -336,6 +336,11 @@ class Engine:
                 "targets": len(self.targets), "interval_sec": self.cfg.get("interval_sec", 1.0)}
 
     # ---- 定時測試：記下起訖時間，結束時用這段期間的原始資料產生報告 ----
+    @staticmethod
+    def _per_target(cfg: dict) -> dict:
+        return {t["name"]: {k: t[k] for k in ("p95_ms", "mute") if k in t}
+                for t in cfg.get("targets", []) if "p95_ms" in t or t.get("mute")}
+
     def context(self) -> dict:
         """目前的網路條件快照（存進報告，之後比較「有線 vs Wi-Fi」「5 GHz vs 2.4 GHz」時用）。"""
         e, w = self.env or {}, self.wifi or {}

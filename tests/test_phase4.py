@@ -404,3 +404,24 @@ def test_reports_saved_listed_renamed_deleted_and_jitter(tmp_path):
         assert c.get("/api/jitter?range=5m").status_code == 200
         assert c.delete(f"/api/reports/{rid}").status_code == 200 and c.get("/api/reports").json() == []
         assert c.get("/api/reports/999").status_code == 404
+
+
+def test_per_target_alert_threshold_and_mute():
+    from alerts import AlertManager
+    import settings as S
+    body = {"targets": [{"name": "A", "host": "1.1.1.1", "p95_ms": 300}, {"name": "B", "host": "8.8.8.8", "mute": True},
+                        {"name": "C", "host": "9.9.9.9"}]}
+    ts = S.validate(body)["targets"]
+    assert ts[0]["p95_ms"] == 300 and ts[1]["mute"] is True and "p95_ms" not in ts[2]
+    for bad in (5, 99999, "abc"):
+        try:
+            S.validate({"targets": [{"name": "A", "host": "1.1.1.1", "p95_ms": bad}]})
+            assert False
+        except S.SettingsError:
+            pass
+    am = AlertManager({"macos_notification": False}, None, lambda *a: None, {"A": {"p95_ms": 300}, "B": {"mute": True}})
+    slow = [10.0] * 30 + [200.0] * 30
+    fired = am.evaluate({"A": slow, "B": slow, "C": slow}, 1000)
+    names = {x["target"] for x in fired} if fired and "target" in fired[0] else None
+    text = " ".join(str(x) for x in fired)
+    assert "C" in text and "B 近" not in text and "A 近" not in text

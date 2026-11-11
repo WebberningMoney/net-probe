@@ -45,7 +45,13 @@ def validate(body: dict, router_name_default: str = "路由器") -> dict:
         if name in seen:
             raise SettingsError(f"目標名稱「{name}」重複了")
         seen.add(name)
-        clean.append({"name": name, "host": host})
+        item = {"name": name, "host": host}
+        p = t.get("p95_ms")                      # 這個目標專屬的 p95 警示門檻（空白＝用全域門檻）
+        if p not in (None, ""):
+            item["p95_ms"] = _num(p, 10, 5000, f"「{name}」的 p95 門檻（毫秒）")
+        if t.get("mute"):                        # 不對這個目標發延遲／丟包警示
+            item["mute"] = True
+        clean.append(item)
     out["targets"] = clean
     out["interval_sec"] = _num(body.get("interval_sec", 1.0), 0.5, 10, "測量間隔（秒）")
     out["ping_timeout_sec"] = _num(body.get("ping_timeout_sec", 1), 1, 5, "逾時（秒）", integer=True)

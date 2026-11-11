@@ -41,8 +41,9 @@ def macos_notify(title: str, message: str) -> None:
 
 class AlertManager:
     def __init__(self, cfg: dict | None = None, router_name: str | None = None,
-                 notifier: Optional[Callable[[str, str], None]] = None):
+                 notifier: Optional[Callable[[str, str], None]] = None, per_target: dict | None = None):
         self.cfg = {**DEFAULTS, **(cfg or {})}
+        self.per_target = per_target or {}     # {目標名稱: {"p95_ms": 門檻, "mute": 是否靜音}}
         self.router_name = router_name
         self.notifier = notifier if notifier is not None else (
             macos_notify if self.cfg["macos_notification"] else None)
@@ -70,11 +71,13 @@ class AlertManager:
             if t >= c["consecutive_timeouts"]:
                 hint = "可能是 Wi-Fi 斷線或路由器問題" if name == self.router_name else "網路可能中斷，或該目標暫時不可用"
                 cands.append(("timeouts", name, f"{who} 已連續 {t} 秒沒有回應（{hint}）", "critical"))
-            if len(samples) >= c["min_samples"]:
+            ov = self.per_target.get(name, {})
+            if len(samples) >= c["min_samples"] and not ov.get("mute"):
                 s = stats.summarize(samples)
+                p95_thr = ov.get("p95_ms", c["p95_ms_1m"])
                 if s["loss_pct"] >= c["loss_pct_1m"]:
                     cands.append(("loss", name, f"{who} 近 1 分鐘丟包率 {s['loss_pct']}%", "warning"))
-                if s["p95"] is not None and s["p95"] >= c["p95_ms_1m"]:
+                if s["p95"] is not None and s["p95"] >= p95_thr:
                     cands.append(("p95", name, f"{who} 近 1 分鐘 p95 延遲 {s['p95']} ms", "warning"))
         # 先濾掉冷卻中的，再依規則分組
         by_rule: dict = {}

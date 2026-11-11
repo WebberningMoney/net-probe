@@ -309,9 +309,9 @@ setInterval(loadReports,15000);loadReports();
 /* ---------- 設定 ---------- */
 let sTargets=[],dragFrom=null;
 function drawTargets(){
-  $("#stargets").innerHTML=`<tr><th style="width:34px"></th><th style="width:30%">名稱</th><th>位址（網址或 IP）</th><th style="width:170px">順序／刪除</th></tr>`+sTargets.map((t,i)=>
-    `<tr data-row="${i}"><td class="handle" title="按住拖曳，調整順序">⠿</td><td><input type="text" data-i="${i}" data-f="name" value="${esc(t.name)}"></td><td><input type="text" data-i="${i}" data-f="host" value="${esc(t.host)}"></td><td style="white-space:nowrap"><button class="btn" data-up="${i}" ${i===0?"disabled":""} title="往上移">↑</button> <button class="btn" data-dn="${i}" ${i===sTargets.length-1?"disabled":""} title="往下移">↓</button> <button class="btn" data-del="${i}" ${sTargets.length<=1?"disabled":""}>刪除</button></td></tr>`).join("");
-  $("#stargets").querySelectorAll("input").forEach(e=>e.oninput=()=>{sTargets[+e.dataset.i][e.dataset.f]=e.value;});
+  $("#stargets").innerHTML=`<tr><th style="width:34px"></th><th style="width:30%">名稱</th><th>位址（網址或 IP）</th><th style="width:120px" title="空白＝使用下方全域門檻">p95 警示門檻 ms</th><th style="width:60px" title="勾選後，不對這個目標發延遲／丟包警示（連續逾時仍會警示）">靜音</th><th style="width:170px">順序／刪除</th></tr>`+sTargets.map((t,i)=>
+    `<tr data-row="${i}"><td class="handle" title="按住拖曳，調整順序">⠿</td><td><input type="text" data-i="${i}" data-f="name" value="${esc(t.name)}"></td><td><input type="text" data-i="${i}" data-f="host" value="${esc(t.host)}"></td><td><input type="number" min="10" max="5000" placeholder="全域" data-i="${i}" data-f="p95_ms" value="${t.p95_ms??""}"></td><td><input type="checkbox" data-i="${i}" data-f="mute" ${t.mute?"checked":""}></td><td style="white-space:nowrap"><button class="btn" data-up="${i}" ${i===0?"disabled":""} title="往上移">↑</button> <button class="btn" data-dn="${i}" ${i===sTargets.length-1?"disabled":""} title="往下移">↓</button> <button class="btn" data-del="${i}" ${sTargets.length<=1?"disabled":""}>刪除</button></td></tr>`).join("");
+  $("#stargets").querySelectorAll("input").forEach(e=>e.oninput=()=>{const t=sTargets[+e.dataset.i];t[e.dataset.f]=e.type==="checkbox"?e.checked:e.value;});
   $("#stargets").querySelectorAll("tr[data-row]").forEach(tr=>{          // 拖拉排序（HTML5 Drag & Drop）
     const i=+tr.dataset.row,h=tr.querySelector(".handle");
     h.onmousedown=()=>{tr.draggable=true;};h.onmouseup=()=>{tr.draggable=false;};   // 只有抓「⠿」才會拖，輸入框仍可正常選字
@@ -343,7 +343,7 @@ async function loadHealth(){try{const h=(await J("/api/health")).engine,f=v=>v==
   已量測 ${h.pings} 次，其中「ping 被強制結束」${h.hung_pings} 次（目標不回應時偶爾會發生，占比不高就不用擔心）；目前 ${h.targets} 個目標、每 ${h.interval_sec} 秒一次。`;}catch(e){}}
 async function loadSettings(){try{fillSettings(await J("/api/settings"));}catch(e){}loadHealth();}
 $("#ssave").onclick=async()=>{
-  const body={targets:sTargets,interval_sec:+$("#s_interval").value,ping_timeout_sec:+$("#s_timeout").value,
+  const body={targets:sTargets.map(t=>{const o={name:t.name,host:t.host};if(t.p95_ms!==""&&t.p95_ms!=null)o.p95_ms=+t.p95_ms;if(t.mute)o.mute=true;return o;}),interval_sec:+$("#s_interval").value,ping_timeout_sec:+$("#s_timeout").value,
     gateway:{enabled:$("#s_gw").checked,name:$("#s_gwname").value},public_ip_lookup:$("#s_pub").checked,wifi_refresh_sec:+$("#s_wifi").value,
     alerts:{enabled:$("#s_aon").checked,macos_notification:$("#s_anotif").checked,consecutive_timeouts:+$("#s_ato").value,loss_pct_1m:+$("#s_aloss").value,p95_ms_1m:+$("#s_ap95").value,cooldown_sec:+$("#s_acd").value},
     curl_test:{url:$("#s_curl").value}};
