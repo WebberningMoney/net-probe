@@ -47,5 +47,24 @@ def test_labels_and_dns_classify():
     assert advice.snr_label(33) == "良好" and advice.snr_label(10) == "很差" and advice.noise_label(-96) == "很乾淨"
     assert dns_info.classify("8.8.8.8")["name"].startswith("Google")
     assert dns_info.classify("192.168.0.1")["source"] == "private"
-    assert dns_info.classify("61.31.233.1") is None
-    assert dns_info.lookup("61.31.233.1", online=False)["source"] == "none"
+    assert dns_info.classify("211.75.1.9") is None
+    assert dns_info.lookup("211.75.1.9", online=False)["source"] == "none"
+
+
+def test_dns_provider_is_company_not_contact_person(monkeypatch):
+    """回歸：DNS 服務商要顯示公司名稱；舊版用註冊資料的聯絡人，結果顯示成人名。"""
+    monkeypatch.setattr(dns_info, "_ipinfo", lambda ip, t: ("Union Broadband Network", "dns.example.net"))
+    r = dns_info.lookup("211.75.1.9")
+    assert r == {"name": "Union Broadband Network（dns.example.net）", "source": "ipinfo"}
+    assert dns_info._clean_org("AS9924 Taiwan Fixed Network, Telco") == "Taiwan Fixed Network, Telco"
+    assert dns_info.classify("61.31.233.1")["name"] == "台灣固網 DNS"
+    monkeypatch.setattr(dns_info, "_ipinfo", lambda ip, t: (_ for _ in ()).throw(OSError()))
+    monkeypatch.setattr(dns_info, "_ptr", lambda ip: None)
+    assert dns_info.lookup("211.75.1.9")["name"] == "未知"
+
+
+def test_dns_advice_summary_lists_providers_once():
+    r = build(env={"interface_type": "Wi-Fi", "dns": ["192.168.0.1", "61.31.233.1", "61.31.1.1"], "vpn": {}},
+              dns_names={"192.168.0.1": {"name": "路由器（轉送給上游 DNS）"}, "61.31.233.1": {"name": "台灣固網 DNS"}, "61.31.1.1": {"name": "台灣固網 DNS"}})
+    d = next(s for s in r["sections"] if s["key"] == "dns")
+    assert d["summary"] == "共 3 個，由 你的路由器、台灣固網 DNS 提供。"

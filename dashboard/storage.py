@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS minute_agg (
 class Storage:
     def __init__(self, path: str = "netprobe.db"):
         # 🔰 check_same_thread=False：允許不同執行緒共用連線，再用鎖(lock)避免同時寫入打架。
+        self.path = path
         self._db = sqlite3.connect(path, check_same_thread=False)
         self._lock = threading.Lock()
         with self._lock:

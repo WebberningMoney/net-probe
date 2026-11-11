@@ -47,6 +47,7 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
 <header><img src="/icon.svg" alt=""><div><b>NetSonar</b> <small>網路聲納</small></div>
 <nav><button data-t="live" class="on">即時</button><button data-t="hist">歷史</button><button data-t="test">定時測試</button><button data-t="trace">路徑分析</button><button data-t="set">設定</button></nav></header>
 <main>
+<div id="offbar"></div>
 <section id="live" class="on">
   <div id="busybar"></div><div id="vpnbar"></div>
   <div id="diag" class="advice"></div>
@@ -96,7 +97,7 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
     <label><input type="checkbox" id="s_gw"> 同時量家裡的路由器<span class="i" tabindex="0" data-g="gateway">ⓘ</span>（建議開啟，找問題的關鍵）　顯示名稱 <input type="text" id="s_gwname" style="width:120px"></label>
     <label>Wi-Fi 詳細資訊更新間隔 <select id="s_wifi" class="btn"><option value="0">不自動更新（手動）</option><option value="60">每 1 分鐘</option><option value="300">每 5 分鐘（預設）</option><option value="900">每 15 分鐘</option></select></label>
     <div class="hint" style="margin:-4px 0 4px 0">讀取時 macOS 會掃描周圍的 Wi-Fi，所有目標可能同時跳一下。如果圖上有固定間隔的跳動，可以先把這裡調長或關閉，看看是不是它造成的。</div>
-    <label><input type="checkbox" id="s_pub"> 查詢對外 IP、網路公司與 DNS 服務商名稱（會連到 ipinfo.io 與 rdap.org，只在網路環境改變時查）</label></div></div>
+    <label><input type="checkbox" id="s_pub"> 查詢對外 IP、網路公司與 DNS 服務商名稱（會連到 ipinfo.io，只在網路環境改變時查）</label></div></div>
   <div class="panel"><h3>警示</h3><div class="form">
     <label><input type="checkbox" id="s_aon"> 啟用警示</label>
     <label><input type="checkbox" id="s_anotif"> 同時跳出 macOS 通知</label>
@@ -108,6 +109,9 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
     <div class="hint">一般不用改，留空就是用 Cloudflare。若要換成別的測速網址：必須以 https 開頭，並在網址中用 <code>{bytes}</code> 代表要下載的大小。</div>
     <input type="text" id="s_curl" style="width:100%;margin-top:8px"></details>
   <div class="panel"><h3>程式健康度 <small class="hint">（分辨「網路不穩」還是「電腦太忙、量測被拖慢」）</small></h3><div id="ehealth" class="hint">讀取中…</div></div>
+  <div class="panel"><h3>關於這個程式</h3><div id="about" class="hint">讀取中…</div>
+    <div class="row" style="margin-top:8px"><button class="btn" id="quit">⏻ 停止 NetSonar</button></div>
+    <div class="hint">關掉瀏覽器<b>不會</b>停止量測，NetSonar 會繼續在背景記錄並在網路變差時通知你。按上面的按鈕才會真的停止；之後打開「應用程式」裡的 NetSonar（或下次登入電腦）就會再啟動。想完全移除請雙擊 <code>解除安裝.command</code>。</div></div>
   <div class="row"><button class="btn pri" id="ssave">儲存設定</button><button class="btn" id="sreset">恢復預設</button><span id="smsg" class="hint"></span></div>
   <div class="hint">設定會保存在這台電腦，更新程式時不會被覆蓋。按「恢復預設」可回到原廠設定。</div>
 </section>
@@ -159,12 +163,14 @@ const ti=k=>GL[k]?`<span class="i" tabindex="0" data-g="${k}">ⓘ</span>`:"";
   document.addEventListener("focusin",e=>{const el=e.target.closest&&e.target.closest(".i");if(el)show(el);});
   document.addEventListener("focusout",hide);
   document.addEventListener("click",e=>{const el=e.target.closest&&e.target.closest(".i");if(el)(cur===el?hide():show(el));else hide();});})();
+const setH=(el,html)=>{if(el._html===html)return false;el._html=html;el.innerHTML=html;return true;};
+let envOpen=false, stopped=false;
 const lvIcon={ok:"🟢",warn:"🟡",bad:"🔴",info:"ℹ️"};
 const secG={where:"where",wifi:"wifi",router:"gateway",external:"latency",jitter:"jitter",dns:"dns",vpn:"vpn"};
 function drawAdvice(a){const o=a.overall;
   $("#diag").className="advice "+o.level;
-  $("#diag").innerHTML=`<div class="ovh"><b>${lvIcon[o.level]} 整體網路建議：${esc(o.title)}</b><small>${esc(o.detail)}</small></div>`+a.sections.map(s=>
-    `<div class="sec"><div class="sh"><span>${lvIcon[s.level]}</span><b>${esc(s.title)}${ti(secG[s.key])}</b><span class="ss">${esc(s.summary)}</span></div>${s.tips.length?`<ul>${s.tips.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:""}</div>`).join("");}
+  setH($("#diag"),`<div class="ovh"><b>${lvIcon[o.level]} 整體網路建議：${esc(o.title)}</b><small>${esc(o.detail)}</small></div>`+a.sections.map(s=>
+    `<div class="sec"><div class="sh"><span>${lvIcon[s.level]}</span><b>${esc(s.title)}${ti(secG[s.key])}</b><span class="ss">${esc(s.summary)}</span></div>${s.tips.length?`<ul>${s.tips.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:""}</div>`).join(""));}
 const snrLb=v=>v>=40?"極佳":v>=25?"良好":v>=15?"偏低":"很差", noiseLb=v=>v<=-90?"很乾淨":v<=-80?"正常":"偏吵";
 const mosTip="MOS＝通話品質分（1–4.5）：4.3+極佳、4.0+良好、3.6+尚可、3.1 以下很差";
 let routerName=null, deadNames=new Set(), latest={}, range="5m", hrange="1h", htarget=null, targets=[], shown={};
@@ -247,14 +253,17 @@ async function drawHist(){
 /* ---------- 即時：卡片 / 判讀 / 環境 ---------- */
 function cards(sum){
   deadNames=new Set(Object.entries(sum).filter(([n,v])=>v.unreachable).map(([n])=>n));
-  $("#cards").innerHTML=targets.map(t=>{const s=sum[t.name]||{},cur=latest[t.name],to=cur===null;
+  setH($("#cards"),targets.map(t=>{const s=sum[t.name]||{},cur=latest[t.name],to=cur===null;
     if(s.unreachable)return `<div class="card dead"><h4><span>${esc(t.name)}</span><span>—</span></h4><div class="big">無回應</div><div class="deadnote">這個位址一直沒有回應，但其他目標都正常（開 VPN 時常見，有些網站也會擋這種測試）。已暫停對它的警示；可以到「設定」頁刪除。</div></div>`;
     return `<div class="card ${s.grade||""}"><h4><span>${esc(t.name)}</span><span title="${mosTip}">MOS ${fmt(s.mos)}</span></h4>
     <div class="big ${to?"to":""}">${cur===undefined?"—":to?"逾時":fmt(cur)}<small> ${cur>=0&&cur!==null?"ms":""}</small></div>
-    <dl><dt>平均 / 慢的時候${ti("p95")}</dt><dd>${fmt(s.avg)} / ${fmt(s.p95)}</dd><dt>抖動${ti("jitter")}</dt><dd>${fmt(s.jitter)}</dd><dt>丟包${ti("loss")}</dt><dd>${s.loss_pct??"—"}%</dd><dt>分數${ti("score")}</dt><dd>${fmt(s.score)} ${s.grade||""}</dd></dl>${s.avg>50&&(s.jitter??99)<10&&(s.loss_pct??9)<1&&t.name!==routerName?`<div class="far">距離較遠，偏慢屬正常</div>`:""}</div>`;}).join("");
+    <dl><dt>平均 / 慢的時候${ti("p95")}</dt><dd>${fmt(s.avg)} / ${fmt(s.p95)}</dd><dt>抖動${ti("jitter")}</dt><dd>${fmt(s.jitter)}</dd><dt>丟包${ti("loss")}</dt><dd>${s.loss_pct??"—"}%</dd><dt>分數${ti("score")}</dt><dd>${fmt(s.score)} ${s.grade||""}</dd></dl>${s.avg>50&&(s.jitter??99)<10&&(s.loss_pct??9)<1&&t.name!==routerName?`<div class="far">距離較遠，偏慢屬正常</div>`:""}</div>`;}).join(""));
 }
 const priv={ssid:true,ip:true};
 function maskable(key,text){return priv[key]?`${"•".repeat(8)}<span class="mask" onclick="priv['${key}']=false;side()">顯示</span>`:`${esc(text)}<span class="mask" onclick="priv['${key}']=true;side()">隱藏</span>`;}
+function offline(on){
+  $("#offbar").innerHTML=!on?"":`<div class="banner"><b>${stopped?"NetSonar 已停止":"連不到 NetSonar 的背景程式"}</b>（目前沒有在量測）。要重新啟動：打開「應用程式」裡的 <b>NetSonar</b>；如果你是用終端機啟動的，請重新執行 <code>./run_dashboard.sh</code>。啟動後這個頁面會自動恢復。</div>`;
+  if(!on)stopped=false;}
 async function side(){
   try{
     const [d,sum,e,al,ev]=await Promise.all([J("/api/advice"),J("/api/summary?range=5m"),J("/api/env"),J("/api/alerts"),J("/api/events")]);
@@ -277,11 +286,12 @@ async function side(){
     if(pub&&pub.org)h+=R((v.active?"VPN 業者":"網路公司")+ti("isp"),esc(pub.org));
     let adv=R("MTU"+ti("mtu"),en.mtu||"—")+R("Proxy"+ti("proxy"),(en.proxy||[]).join("、")||"無")+R("IPv6"+ti("ipv6"),en.ipv6?"可用":(en.ipv6_via_vpn_only?"不可用（VPN 期間通常會停用）":"不可用"));
     if(w)adv+=R("網路名稱",w.ssid?maskable("ssid",w.ssid):"系統未提供（macOS 隱私限制）");
-    h+=`</table><details style="margin-top:8px"><summary style="cursor:pointer;color:var(--mute);font-size:12px">進階資訊（MTU、Proxy、IPv6…）</summary><table>${adv}</table></details><table>`;
-    $("#env").innerHTML=`<table>${h}</table>`;
+    h+=`</table><details id="envadv" ${envOpen?"open":""} style="margin-top:8px"><summary style="cursor:pointer;color:var(--mute);font-size:12px">進階資訊（MTU、Proxy、IPv6…）</summary><table>${adv}</table></details><table>`;
+    if(setH($("#env"),`<table>${h}</table>`)){const dt=$("#envadv");if(dt)dt.ontoggle=()=>{envOpen=dt.open;};}   // 記住「進階資訊」有沒有展開，資料更新時不會自己收起來
     const items=[...al.map(a=>({ts:a.ts,t:"⚠️ "+a.message})),...ev.filter(x=>!x.minor).map(x=>({ts:x.ts,t:"🔄 "+x.text}))].sort((a,b)=>b.ts-a.ts).slice(0,12);
-    $("#alerts").innerHTML=items.length?items.map(x=>`<li>${tm(x.ts)} ${esc(x.t)}</li>`).join(""):"<li><small class='m'>尚無</small></li>";
-  }catch(e){}
+    setH($("#alerts"),items.length?items.map(x=>`<li>${tm(x.ts)} ${esc(x.t)}</li>`).join(""):"<li><small class='m'>尚無</small></li>");
+    offline(false);
+  }catch(e){offline(true);}
 }
 
 $("#wifiref").onclick=async()=>{await fetch("/api/wifi/refresh",{method:"POST"});$("#wifiref").textContent="更新中…";setTimeout(()=>{$("#wifiref").textContent="更新 Wi-Fi 資訊";side();},9000);};
@@ -388,7 +398,11 @@ async function loadHealth(){try{const h=(await J("/api/health")).engine,f=v=>v==
   每次量測的額外耗時（電腦啟動量測程式所花的時間，不是網路延遲）：一般 ${f(h.overhead_ms.p50)}、慢的時候 ${f(h.overhead_ms.p95)}、最多 ${f(h.overhead_ms.max)}（正常通常小於 50 ms）<br>
   程式反應延遲（該量的時候晚了多久才量）：一般 ${f(h.loop_lag_ms.p50)}、慢的時候 ${f(h.loop_lag_ms.p95)}、最多 ${f(h.loop_lag_ms.max)}（正常小於 100 ms）<br>
   已量測 ${h.pings} 次，其中「等太久被強制結束」${h.hung_pings} 次（目標不回應時偶爾會發生，比例不高就不用擔心）；目前 ${h.targets} 個目標、每 ${h.interval_sec} 秒量一次。`;}catch(e){}}
-async function loadSettings(){try{fillSettings(await J("/api/settings"));}catch(e){}loadHealth();}
+async function loadAbout(){try{const a=await J("/api/about");
+  $("#about").innerHTML=`執行方式：<b>${a.mode==="service"?"背景服務（登入電腦後自動啟動）":"從終端機啟動（關掉終端機視窗就會停止）"}</b><br>量測資料存在：<code>${esc(a.db_path)}</code><br>你的設定存在：<code>${esc(a.settings_path)}</code>`+(a.log_path?`<br>執行紀錄：<code>${esc(a.log_path)}</code>`:"")+`<br><small>想在 Finder 看這些檔案：選單「前往 → 前往檔案夾」，貼上路徑（到最後一個 / 為止）。</small>`;}catch(e){}}
+$("#quit").onclick=async()=>{if(!confirm("要停止 NetSonar 嗎？\n停止後不會再量測，也不會發通知。\n之後打開「應用程式」裡的 NetSonar，或下次登入電腦，就會再啟動。"))return;
+  try{const r=await fetch("/api/quit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({confirm:true})});if(r.ok){stopped=true;offline(true);}else alert((await r.json()).detail);}catch(e){stopped=true;offline(true);}};
+async function loadSettings(){try{fillSettings(await J("/api/settings"));}catch(e){}loadHealth();loadAbout();}
 $("#ssave").onclick=async()=>{
   const body={targets:sTargets.map(t=>{const o={name:t.name,host:t.host};if(t.p95_ms!==""&&t.p95_ms!=null)o.p95_ms=+t.p95_ms;if(t.mute)o.mute=true;return o;}),interval_sec:+$("#s_interval").value,ping_timeout_sec:+$("#s_timeout").value,
     gateway:{enabled:$("#s_gw").checked,name:$("#s_gwname").value},public_ip_lookup:$("#s_pub").checked,wifi_refresh_sec:+$("#s_wifi").value,
@@ -409,8 +423,8 @@ document.querySelector('nav button[data-t=set]').addEventListener("click",loadSe
   new EventSource("/api/stream").onmessage=e=>{latest=JSON.parse(e.data).results||{};};
   const reload=async()=>{targets=await J("/api/targets");};
   await side();drawLive();
-  setInterval(async()=>{await reload();side();},3000);
-  setInterval(drawLive,5000);
+  setInterval(async()=>{try{await reload();}catch(e){}side();},3000);          // 連不到程式時 side() 會顯示提示，恢復後自動繼續
+  setInterval(()=>drawLive().catch(()=>{}),5000);
 })();
 </script>
 </body>

@@ -15,12 +15,15 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import signal
+import subprocess
+import threading
 import time
 from collections import deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 
 import gateway
@@ -207,7 +210,7 @@ class Engine:
                 asyncio.create_task(self._lookup_public())
 
     def _lookup_dns_missing(self) -> None:
-        """DNS 伺服器是誰提供的：內建名單立刻有，認不出來的在背景查（RDAP，需「查詢對外 IP」開啟）。"""
+        """DNS 伺服器是誰提供的：內建名單立刻有，認不出來的在背景查（ipinfo.io，需「查詢對外 IP」開啟）。"""
         for ip in (self.env or {}).get("dns", []):
             if ip in self.dns_names:
                 continue
@@ -475,6 +478,23 @@ async def _run_trace(engine: Engine, jid: str, host: str) -> None:
     job["running"] = False
 
 
+SERVICE_LABEL = "com.netsonar.dashboard"
+
+
+def _quit_process() -> None:
+    """真的把自己關掉。
+    背景服務：請 macOS 把服務卸下（否則系統會以為它當掉而自動重開）；下次登入或打開 NetSonar App 會再啟動。
+    終端機啟動：等同按 Ctrl+C。"""
+    if os.environ.get("NETSONAR_SERVICE") == "1":
+        try:
+            subprocess.Popen(["launchctl", "bootout", f"gui/{os.getuid()}/{SERVICE_LABEL}"],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            return
+        except OSError:
+            pass
+    os.kill(os.getpid(), signal.SIGINT)
+
+
 def create_app(cfg: dict | None = None, storage: Storage | None = None,
                runner=None, autostart: bool = True, notifier=None, settings_file: Path | None = None) -> FastAPI:
     from_disk = cfg is None
@@ -496,6 +516,29 @@ def create_app(cfg: dict | None = None, storage: Storage | None = None,
 
     app = FastAPI(title="NetSonar", lifespan=lifespan)
     app.state.engine = engine
+    app.state.quit = _quit_process            # 測試時可換成假的，避免真的把測試程式關掉
+
+    @app.get("/api/about")
+    def about():
+        """這個程式目前怎麼執行、資料放在哪（給「設定」頁顯示）。"""
+        service = os.environ.get("NETSONAR_SERVICE") == "1"
+        return {"mode": "service" if service else "terminal",
+                "db_path": str(Path(storage.path).resolve()) if storage.path != ":memory:" else "（記憶體，不保存）",
+                "settings_path": str(sfile.resolve()),
+                "log_path": str(Path.home() / "Library/Logs/NetSonar.log") if service else None,
+                "port": engine.cfg.get("port", 8765)}
+
+    @app.post("/api/quit")
+    def quit_app(body: dict, request: Request):
+        """停止 NetSonar（背景量測也會停）。
+        🔒 只接受從儀表板自己的網頁送來的請求：別的網站就算叫瀏覽器連過來，來源（Origin）不符也會被拒絕。"""
+        origin = request.headers.get("origin")
+        if origin and origin.split("//")[-1].split(":")[0] not in ("127.0.0.1", "localhost"):
+            raise HTTPException(403, "只接受來自本機儀表板的請求")
+        if body.get("confirm") is not True:
+            raise HTTPException(400, "需要 confirm: true")
+        threading.Timer(0.5, app.state.quit).start()      # 稍等一下再關，讓這個回應先送回網頁
+        return {"ok": True}
 
     @app.get("/api/health")
     def health():

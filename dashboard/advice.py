@@ -105,11 +105,18 @@ def _dns(env: dict, names: dict) -> dict | None:
     ips = (env or {}).get("dns") or []
     if not ips:
         return None
-    rows = [f"{ip}：{(names.get(ip) or {}).get('name', '查詢中…')}" for ip in ips]
+    who = []                                   # 依出現順序、不重複的提供者名稱（位址明細在「網路環境」面板）
+    for ip in ips:
+        n = (names.get(ip) or {}).get("name", "查詢中…")
+        n = "你的路由器" if n.startswith("路由器") else n.split("（")[0]
+        n = "未知的服務商" if n.startswith("未知") else n
+        if n not in who:
+            who.append(n)
     tips = []
     if all(ip.startswith(("192.168.", "10.", "172.")) for ip in ips):
         tips.append("電腦把所有網址查詢交給路由器代辦；路由器再去問上游，實際用誰由路由器的設定決定。")
-    return {"key": "dns", "title": "DNS（網址翻譯服務）", "level": "info", "summary": "；".join(rows) + "。", "tips": tips}
+    return {"key": "dns", "title": "DNS（網址翻譯服務）", "level": "info",
+            "summary": f"共 {len(ips)} 個，由 " + "、".join(who) + " 提供。", "tips": tips}
 
 
 def _vpn(env: dict) -> dict | None:

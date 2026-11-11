@@ -433,3 +433,18 @@ def test_wifi_refresh_from_threadpool_does_not_crash(tmp_path):
         assert r.status_code == 200 and r.json()["started"] is True
         assert c.get("/api/advice").status_code == 200
         assert "dns_names" in c.get("/api/env").json()
+
+
+def test_about_and_quit_guarded(tmp_path):
+    app = create_app({**CFG}, Storage(str(tmp_path / "q.db")), _runner, autostart=False, settings_file=tmp_path / "s.json")
+    called = []
+    app.state.quit = lambda: called.append(1)
+    with TestClient(app) as c:
+        ab = c.get("/api/about").json()
+        assert ab["mode"] == "terminal" and ab["db_path"].endswith("q.db") and ab["settings_path"].endswith("s.json")
+        assert c.post("/api/quit", json={}).status_code == 400                       # 沒有 confirm
+        assert c.post("/api/quit", json={"confirm": True}, headers={"Origin": "https://evil.example"}).status_code == 403
+        assert not called
+        assert c.post("/api/quit", json={"confirm": True}, headers={"Origin": "http://127.0.0.1:8765"}).status_code == 200
+        time.sleep(0.8)
+        assert called == [1]
