@@ -15,6 +15,7 @@ ping_*.log
 # 儀表板
 dashboard/.venv/
 dashboard/*.db
+dashboard/*.db-*
 dashboard/settings.json
 __pycache__/
 .pytest_cache/

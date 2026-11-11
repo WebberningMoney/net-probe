@@ -41,7 +41,7 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
 <nav><button data-t="live" class="on">即時</button><button data-t="hist">歷史</button><button data-t="test">定時測試</button><button data-t="trace">路徑分析</button><button data-t="set">設定</button></nav></header>
 <main>
 <section id="live" class="on">
-  <div id="vpnbar"></div>
+  <div id="busybar"></div><div id="vpnbar"></div>
   <div id="diag" class="diag"></div>
   <div id="cards" class="cards"></div>
   <details class="panel" id="mosinfo"><summary style="cursor:pointer;font-weight:600">❓ MOS 是什麼？怎麼看？</summary>
@@ -78,7 +78,7 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
 </section>
 <section id="set">
   <div class="panel"><h3>監測目標</h3>
-    <div class="hint">要 ping 誰。新增或修改後按下方「儲存設定」立即生效，不必重新啟動。最多 8 個。</div>
+    <div class="hint">要 ping 誰。可用 ↑↓ 調整順序（儀表板的卡片、圖例、報告都照這個順序）。新增或修改後按下方「儲存設定」立即生效，不必重新啟動。最多 8 個。</div>
     <table id="stargets"></table><div class="row"><button class="btn" id="sadd">＋ 新增目標</button></div></div>
   <div class="panel"><h3>測量</h3><div class="form">
     <label>測量間隔（秒）<input type="number" id="s_interval" step="0.5" min="0.5" max="10"></label>
@@ -95,6 +95,7 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
   <details class="panel"><summary style="cursor:pointer;font-weight:600">進階：下載測試網址</summary>
     <div class="hint">留空使用預設（Cloudflare）。網址必須是 https，並用 <code>{bytes}</code> 代表要下載的位元組數。</div>
     <input type="text" id="s_curl" style="width:100%;margin-top:8px"></details>
+  <div class="panel"><h3>引擎健康度 <small class="hint">（用來分辨「網路不穩」還是「本程式／電腦太忙」）</small></h3><div id="ehealth" class="hint">讀取中…</div></div>
   <div class="row"><button class="btn pri" id="ssave">儲存設定</button><button class="btn" id="sreset">恢復預設</button><span id="smsg" class="hint"></span></div>
   <div class="hint">設定存在 <code>dashboard/settings.json</code>（不會被 git 更新覆蓋）。連接埠（8765）需修改 <code>config.json</code> 並重新啟動。</div>
 </section>
@@ -143,9 +144,10 @@ async function seriesFor(name,r){
   return d.points.map(p=>p.minute!==undefined?{t:p.minute,v:p.avg,loss:p.count?+(p.lost/p.count*100).toFixed(1):0}:{t:p.ts,v:p.avg,loss:p.loss_pct});
 }
 async function drawLive(){
+  const [ev,all]=await Promise.all([J("/api/events"),J(`/api/series_all?range=${range}`)]);
+  const conv=pts=>pts.map(p=>p.minute!==undefined?{t:p.minute,v:p.avg,loss:p.count?+(p.lost/p.count*100).toFixed(1):0}:{t:p.ts,v:p.avg,loss:p.loss_pct});
   const names=targets.map(t=>t.name).filter(n=>shown[n]!==false);
-  const [ev,...ss]=await Promise.all([J("/api/events"),...names.map(n=>seriesFor(n,range))]);
-  plot($("#chart"),names.map((n,i)=>({pts:ss[i],color:COL[targets.findIndex(t=>t.name===n)%COL.length]})),ev);
+  plot($("#chart"),names.map(n=>({pts:conv(all.series[n]||[]),color:COL[targets.findIndex(t=>t.name===n)%COL.length]})),ev);
   $("#legend").innerHTML=targets.map((t,i)=>`<label style="cursor:pointer"><input type="checkbox" data-n="${esc(t.name)}" ${shown[t.name]!==false?"checked":""}> <i style="background:${COL[i%COL.length]}"></i>${esc(t.name)}</label>`).join("")+`<span><i style="background:#dc2626;border-radius:50%"></i>有丟包</span>`;
   $("#legend").querySelectorAll("input").forEach(c=>c.onchange=()=>{shown[c.dataset.n]=c.checked;drawLive();});
 }
@@ -175,6 +177,8 @@ async function side(){
     $("#diag").className="diag "+(d.code||"");
     $("#diag").innerHTML=`<b>判讀：${esc(d.title)}</b><br><small>${esc(d.detail)}${d.gateway_ip?`（路由器 ${esc(d.gateway_ip)}）`:""}</small>`;
     cards(sum.targets);
+    const hh=(await J("/api/health")).engine;
+    $("#busybar").innerHTML=hh.ok?"":`<div class="banner">⚠️ 本機偏忙：量測可能受影響，逾時不一定是網路問題（詳見「設定」頁底部的引擎健康度）。</div>`;
     const v=e.env.vpn||{};
     $("#vpnbar").innerHTML=v.active?`<div class="banner">🔒 VPN 開啟中（${esc(v.interface)}）：所有延遲都包含「繞到 VPN 伺服器」的距離，分數會偏低；路由器那一列才是你家到路由器的真實狀況。</div>`:"";
     const w=e.wifi, en=e.env, pub=e.public;
@@ -255,9 +259,12 @@ setInterval(pollTest,2000);pollTest();loadCurl();
 /* ---------- 設定 ---------- */
 let sTargets=[];
 function drawTargets(){
-  $("#stargets").innerHTML=`<tr><th style="width:30%">名稱</th><th>位址（網址或 IP）</th><th style="width:80px"></th></tr>`+sTargets.map((t,i)=>
-    `<tr><td><input type="text" data-i="${i}" data-f="name" value="${esc(t.name)}"></td><td><input type="text" data-i="${i}" data-f="host" value="${esc(t.host)}"></td><td><button class="btn" data-del="${i}" ${sTargets.length<=1?"disabled":""}>刪除</button></td></tr>`).join("");
+  $("#stargets").innerHTML=`<tr><th style="width:30%">名稱</th><th>位址（網址或 IP）</th><th style="width:170px">順序／刪除</th></tr>`+sTargets.map((t,i)=>
+    `<tr><td><input type="text" data-i="${i}" data-f="name" value="${esc(t.name)}"></td><td><input type="text" data-i="${i}" data-f="host" value="${esc(t.host)}"></td><td style="white-space:nowrap"><button class="btn" data-up="${i}" ${i===0?"disabled":""} title="往上移">↑</button> <button class="btn" data-dn="${i}" ${i===sTargets.length-1?"disabled":""} title="往下移">↓</button> <button class="btn" data-del="${i}" ${sTargets.length<=1?"disabled":""}>刪除</button></td></tr>`).join("");
   $("#stargets").querySelectorAll("input").forEach(e=>e.oninput=()=>{sTargets[+e.dataset.i][e.dataset.f]=e.value;});
+  const mv=(i,d)=>{[sTargets[i],sTargets[i+d]]=[sTargets[i+d],sTargets[i]];drawTargets();};
+  $("#stargets").querySelectorAll("[data-up]").forEach(b=>b.onclick=()=>mv(+b.dataset.up,-1));
+  $("#stargets").querySelectorAll("[data-dn]").forEach(b=>b.onclick=()=>mv(+b.dataset.dn,1));
   $("#stargets").querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{sTargets.splice(+b.dataset.del,1);drawTargets();});
   $("#sadd").disabled=sTargets.length>=8;
 }
@@ -270,7 +277,12 @@ function fillSettings(d){
   $("#s_aloss").value=a.loss_pct_1m??10;$("#s_ap95").value=a.p95_ms_1m??150;$("#s_acd").value=a.cooldown_sec??300;$("#s_curl").value=(c.curl_test||{}).url||"";
   $("#sreset").disabled=!d.customized;
 }
-async function loadSettings(){try{fillSettings(await J("/api/settings"));}catch(e){}}
+async function loadHealth(){try{const h=(await J("/api/health")).engine,f=v=>v==null?"—":v+" ms";
+  $("#ehealth").innerHTML=`<b style="color:${h.ok?"#16a34a":"#dc2626"}">${h.ok?"✅ 正常：本程式沒有被拖慢，逾時多半是網路本身的問題":"⚠️ 本機偏忙：量測可能受影響（關閉其他吃資源的程式，或減少目標／加大間隔）"}</b><br>
+  每次 ping 的額外耗時（啟動 ping、讀輸出）：中位 ${f(h.overhead_ms.p50)}、p95 ${f(h.overhead_ms.p95)}、最高 ${f(h.overhead_ms.max)}（正常通常 &lt; 50 ms）<br>
+  程式排程延遲：中位 ${f(h.loop_lag_ms.p50)}、p95 ${f(h.loop_lag_ms.p95)}、最高 ${f(h.loop_lag_ms.max)}（正常 &lt; 100 ms）<br>
+  已量測 ${h.pings} 次，其中「逾時卻拖很久」${h.slow_pings} 次（愈接近 0 愈好）；目前 ${h.targets} 個目標、每 ${h.interval_sec} 秒一次。`;}catch(e){}}
+async function loadSettings(){try{fillSettings(await J("/api/settings"));}catch(e){}loadHealth();}
 $("#ssave").onclick=async()=>{
   const body={targets:sTargets,interval_sec:+$("#s_interval").value,ping_timeout_sec:+$("#s_timeout").value,
     gateway:{enabled:$("#s_gw").checked,name:$("#s_gwname").value},public_ip_lookup:$("#s_pub").checked,

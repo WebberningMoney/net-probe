@@ -37,11 +37,21 @@ class Storage:
         self._db = sqlite3.connect(path, check_same_thread=False)
         self._lock = threading.Lock()
         with self._lock:
+            # WAL：寫入不會擋住讀取、也少很多次磁碟同步，目標變多時比較不容易卡；
+            # synchronous=NORMAL：當機最壞只會掉最後幾秒資料（監測資料可接受）。
+            self._db.execute("PRAGMA journal_mode=WAL")
+            self._db.execute("PRAGMA synchronous=NORMAL")
             self._db.executescript(_SCHEMA)
 
     def add_samples(self, ts: int, results: dict) -> None:
         """results = {目標名稱: 毫秒或 None}"""
         rows = [(ts, name, rtt) for name, rtt in results.items()]
+        with self._lock:
+            self._db.executemany("INSERT INTO samples VALUES (?,?,?)", rows)
+            self._db.commit()
+
+    def add_rows(self, rows: list) -> None:
+        """rows = [(ts, 目標名稱, 毫秒或 None), ...]：一次寫入、一次 commit。"""
         with self._lock:
             self._db.executemany("INSERT INTO samples VALUES (?,?,?)", rows)
             self._db.commit()

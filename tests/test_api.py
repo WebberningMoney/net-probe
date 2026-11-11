@@ -26,7 +26,8 @@ def client(tmp_path):
 
 def test_health_and_targets(client):
     c, _ = client
-    assert c.get("/api/health").json() == {"ok": True, "targets": 2}
+    h = c.get("/api/health").json()
+    assert h["ok"] is True and h["targets"] == 2
     assert [t["name"] for t in c.get("/api/targets").json()] == ["A", "B"]
 
 

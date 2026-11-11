@@ -63,3 +63,16 @@ def test_load_overrides_ignores_junk(tmp_path):
     f.write_text("not json")
     assert st.load_overrides(f) == {}
     assert st.load_overrides(tmp_path / "none.json") == {}
+
+
+def test_target_order_is_preserved(tmp_path):
+    f = tmp_path / "o.json"
+    app = create_app(dict(CFG), Storage(str(tmp_path / "o.db")), _runner, autostart=False, settings_file=f)
+    order = ["Z", "M", "A"]
+    body = {**GOOD, "targets": [{"name": n, "host": f"10.0.0.{i}"} for i, n in enumerate(order)],
+            "gateway": {"enabled": False, "name": "路由器"}}
+    with TestClient(app) as c:
+        assert c.put("/api/settings", json=body).status_code == 200
+        assert [t["name"] for t in c.get("/api/targets").json()] == order
+        assert list(c.get("/api/series_all?range=5m").json()["series"]) == order
+    assert [t["name"] for t in st.load_overrides(f)["targets"]] == order

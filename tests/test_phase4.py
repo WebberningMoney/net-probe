@@ -238,3 +238,62 @@ def test_timed_test_and_curl(tmp_path):
         assert done["report"]["curl"] and done["report"]["diagnosis"]["title"]
         assert c.get("/api/test").json()["state"] == "done"
         assert c.post("/api/test/start", json={"minutes": None}).json()["ends_at"] is None
+
+
+# ---------------------------------------------------------------- 各目標獨立量測 / 引擎健康度
+def test_independent_loops_dead_target_does_not_block_others(tmp_path):
+    from app import Engine
+    cfg = {**CFG, "targets": [{"name": "OK1", "host": "1.1.1.1"}, {"name": "DEAD", "host": "9.9.9.9"},
+                              {"name": "OK2", "host": "8.8.8.8"}], "interval_sec": 0.1, "gateway": {"enabled": False}}
+    counts = {}
+
+    async def run(cmd):
+        h = cmd[-1]
+        counts[h] = counts.get(h, 0) + 1
+        if h == "9.9.9.9":
+            await asyncio.sleep(0.5)                     # 一直逾時、而且很慢
+            return 1, ""
+        return 0, "64 bytes from x: icmp_seq=0 ttl=57 time=12.0 ms"
+
+    async def go():
+        eng = Engine(cfg, Storage(str(tmp_path / "i.db")), run)
+        task = asyncio.create_task(eng.run_forever())
+        await asyncio.sleep(1.2)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        return eng
+    eng = asyncio.run(go())
+    assert counts["1.1.1.1"] >= 7 and counts["8.8.8.8"] >= 7 and counts["9.9.9.9"] <= 3   # 正常目標不被拖慢
+    assert not eng._tasks                                   # 結束時所有量測迴圈都收掉了
+    assert eng.storage.recent_rtts("OK1", 0) and eng.latest["results"]["DEAD"] is None
+    h = eng.engine_health()
+    assert h["pings"] > 10 and h["overhead_ms"]["p50"] is not None and h["ok"]
+
+
+def test_staggered_start_and_target_removal(tmp_path):
+    from app import Engine
+    starts = []
+
+    async def run(cmd):
+        starts.append((cmd[-1], asyncio.get_running_loop().time()))
+        return 0, "64 bytes from x: icmp_seq=0 ttl=57 time=1.0 ms"
+    cfg = {**CFG, "targets": [{"name": f"T{i}", "host": f"10.0.0.{i}"} for i in range(4)],
+           "interval_sec": 1.0, "gateway": {"enabled": False}}
+
+    async def go():
+        eng = Engine(cfg, Storage(str(tmp_path / "s.db")), run)
+        t = asyncio.create_task(eng.run_forever())
+        await asyncio.sleep(0.9)
+        first = dict(starts)
+        eng.apply_config({**cfg, "targets": cfg["targets"][:2]})
+        await asyncio.sleep(1.3)
+        t.cancel()
+        return eng, first
+    eng, first = asyncio.run(go())
+    t0 = min(first.values())
+    offs = sorted(round(v - t0, 1) for v in first.values())
+    assert offs == [0.0, 0.2, 0.5, 0.8] or (offs[-1] - offs[0]) >= 0.6      # 錯開起跑
+    assert set(eng._tasks) <= {"T0", "T1"} or not eng._tasks

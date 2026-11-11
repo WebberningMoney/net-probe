@@ -82,6 +82,10 @@ class Engine:
         self.test: dict = {"state": "idle"}     # 定時測試狀態
         self.curl_results: deque = deque(maxlen=20)
         self.curl_busy = False
+        # 每個目標各自獨立量測（見 _target_loop）；結果先放進緩衝區，每秒統一寫入資料庫
+        self._buf: list = []
+        self._tasks: dict = {}
+        self.metrics = {"overhead": deque(maxlen=300), "lag": deque(maxlen=120), "slow": 0, "pings": 0}
         self.trace_lines = None            # 測試時可注入假的 traceroute 輸出
         self.trace_jobs: dict = {}         # job_id → 路徑分析進度
 
@@ -172,19 +176,58 @@ class Engine:
     async def _lookup_public(self) -> None:
         self.public = await asyncio.to_thread(netenv.lookup_public) or {}
 
-    async def tick(self) -> dict:
-        """做一輪：所有目標同時 ping 一次並儲存。"""
-        timeout = self.cfg.get("ping_timeout_sec", 1)
-        await self.refresh_gateway(time.monotonic())
-        await self.refresh_env(time.monotonic())
+    # ------------------------------------------------------------------ 量測
+    # 💡 設計：每個目標有「自己的」量測迴圈，起跑時間錯開（平均分散在一個間隔內），
+    #    好處：①不會每秒同時送出一整批封包 ②某個目標一直逾時（例如擋 ICMP）不會拖慢其他目標。
+    #    量測結果先放進緩衝區 _buf，由 _aggregate 每秒統一寫入資料庫、更新警示與網頁。
+    def _record(self, name: str, rtt, wall_ms: float, timeout: float) -> None:
+        self._buf.append((int(time.time()), name, rtt))
+        m = self.metrics
+        m["pings"] += 1
+        if rtt is not None:
+            m["overhead"].append(max(0.0, wall_ms - rtt))     # 啟動 ping 程式、讀取輸出的額外耗時
+        elif wall_ms > timeout * 1000 + 500:
+            m["slow"] += 1                                    # 逾時卻拖了很久 → 本機可能卡住
+
+    async def _target_loop(self, name: str, offset: float) -> None:
+        await asyncio.sleep(offset)
+        nxt = time.monotonic()
+        while True:
+            t = next((x for x in self.targets if x["name"] == name), None)
+            if t is None:
+                return                                         # 目標被刪除了
+            timeout = self.cfg.get("ping_timeout_sec", 1)
+            w0 = time.monotonic()
+            rtt = await probe.ping_once(t["host"], timeout, self.runner)
+            self._record(name, rtt, (time.monotonic() - w0) * 1000, timeout)
+            nxt += self.cfg.get("interval_sec", 1.0)
+            now = time.monotonic()
+            if nxt < now:
+                nxt = now                                      # 落後了不要補跑（避免連續狂送）
+            await asyncio.sleep(nxt - now)
+
+    def _reconcile(self) -> None:
+        """依目前的目標清單啟動／停止各目標的量測迴圈（設定改了、路由器剛偵測到時會用到）。"""
         names = [t["name"] for t in self.targets]
-        rtts = await asyncio.gather(*[
-            probe.ping_once(t["host"], timeout, self.runner) for t in self.targets])
-        ts = int(time.time())
-        results = dict(zip(names, rtts))
-        self.storage.add_samples(ts, results)
-        for n, v in results.items():
+        interval = self.cfg.get("interval_sec", 1.0)
+        for n in list(self._tasks):
+            if n not in names or self._tasks[n].done():
+                self._tasks.pop(n).cancel()
+        for i, n in enumerate(names):
+            if n not in self._tasks:
+                self._tasks[n] = asyncio.create_task(self._target_loop(n, interval * i / max(1, len(names))))
+
+    async def _aggregate(self) -> dict:
+        """把緩衝區的結果寫入資料庫、更新統計視窗、評估警示、推送給網頁。"""
+        rows, self._buf = self._buf, []
+        names = [t["name"] for t in self.targets]
+        results = {n: v for n, v in self.latest.get("results", {}).items() if n in names}
+        if rows:
+            await asyncio.to_thread(self.storage.add_rows, rows)     # 不在事件迴圈裡等資料庫鎖
+        for ts, n, v in rows:
             self.windows.setdefault(n, deque(maxlen=60)).append(v)
+            results[n] = v
+        ts = int(time.time())
         new_alerts = self.alerts.evaluate({n: list(w) for n, w in self.windows.items()}, ts)
         self.latest = {"ts": ts, "results": results, "alerts": new_alerts}
         t = self.test
@@ -201,15 +244,49 @@ class Engine:
                                     ret.get("minute_days", 90))
         return self.latest
 
+    async def tick(self) -> dict:
+        """（測試用）同步做一輪：所有目標同時 ping 一次，再彙總。正式執行改用各目標獨立迴圈。"""
+        timeout = self.cfg.get("ping_timeout_sec", 1)
+        await self.refresh_gateway(time.monotonic())
+        await self.refresh_env(time.monotonic())
+        targets = self.targets
+        rtts = await asyncio.gather(*[probe.ping_once(t["host"], timeout, self.runner) for t in targets])
+        ts = int(time.time())
+        self._buf.extend((ts, t["name"], r) for t, r in zip(targets, rtts))
+        return await self._aggregate()
+
     async def run_forever(self) -> None:
-        interval = self.cfg.get("interval_sec", 1.0)
-        while True:
-            started = time.monotonic()
-            try:
-                await self.tick()
-            except Exception as e:         # 單輪失敗不要讓整個監測停掉
-                print("tick error:", e)
-            await asyncio.sleep(max(0.0, interval - (time.monotonic() - started)))
+        try:
+            while True:
+                started = time.monotonic()
+                try:
+                    await self.refresh_gateway(started)
+                    await self.refresh_env(started)
+                    self._reconcile()
+                    await self._aggregate()
+                except Exception as e:     # 單輪失敗不要讓整個監測停掉
+                    print("tick error:", e)
+                interval = self.cfg.get("interval_sec", 1.0)
+                await asyncio.sleep(max(0.0, interval - (time.monotonic() - started)))
+                # 事件迴圈延遲：本來該睡 interval，實際多睡了多久。數字大＝本程式被拖慢
+                self.metrics["lag"].append(max(0.0, (time.monotonic() - started - interval) * 1000))
+        finally:
+            for t in self._tasks.values():
+                t.cancel()
+            self._tasks.clear()
+
+    def engine_health(self) -> dict:
+        """引擎健康度：用來分辨「是網路不穩」還是「本程式／本機太忙」。"""
+        def pct(vals, p):
+            v = sorted(vals)
+            return round(v[min(len(v) - 1, int(len(v) * p))], 1) if v else None
+        m = self.metrics
+        oh, lag = list(m["overhead"]), list(m["lag"])
+        busy = bool((pct(oh, .95) or 0) > 150 or (pct(lag, .95) or 0) > 300 or m["slow"] > 3)
+        return {"ok": not busy, "pings": m["pings"], "slow_pings": m["slow"],
+                "overhead_ms": {"p50": pct(oh, .5), "p95": pct(oh, .95), "max": round(max(oh), 1) if oh else None},
+                "loop_lag_ms": {"p50": pct(lag, .5), "p95": pct(lag, .95), "max": round(max(lag), 1) if lag else None},
+                "targets": len(self.targets), "interval_sec": self.cfg.get("interval_sec", 1.0)}
 
     # ---- 定時測試：記下起訖時間，結束時用這段期間的原始資料產生報告 ----
     def start_test(self, minutes: int | None) -> dict:
@@ -297,7 +374,7 @@ def create_app(cfg: dict | None = None, storage: Storage | None = None,
 
     @app.get("/api/health")
     def health():
-        return {"ok": True, "targets": len(engine.targets)}
+        return {"ok": True, "targets": len(engine.targets), "engine": engine.engine_health()}
 
     @app.get("/api/targets")
     def targets():
@@ -382,6 +459,19 @@ def create_app(cfg: dict | None = None, storage: Storage | None = None,
                     "points": engine.storage.raw_series(target, since, bucket)}
         return {"target": target, "range": range, "bucket_sec": 60 if range == "24h" else 300,
                 "points": engine.storage.minute_series(target, since)}
+
+    @app.get("/api/series_all")
+    def series_all(range: str = "1h"):
+        """一次取回所有目標的圖表資料（網頁每幾秒更新一次，合併成一個請求比一個目標一個請求輕）。"""
+        if range not in RANGES:
+            raise HTTPException(400, f"range 必須是 {list(RANGES)} 其中之一")
+        since = int(time.time()) - RANGES[range]
+        out = {}
+        for t in engine.targets:
+            n = t["name"]
+            out[n] = (engine.storage.raw_series(n, since, 1 if range == "5m" else 10) if range in ("5m", "1h")
+                      else engine.storage.minute_series(n, since))
+        return {"range": range, "series": out}
 
     @app.get("/api/export.csv")
     def export_csv(target: str, range: str = "24h", since: int | None = None, until: int | None = None):
