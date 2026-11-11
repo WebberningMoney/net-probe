@@ -15,20 +15,27 @@ nav button.on{background:#17305a;color:#fff}
 main{max-width:1180px;margin:0 auto;padding:18px 24px 48px} section{display:none} section.on{display:block}
 .banner{padding:10px 14px;border-radius:8px;margin-bottom:12px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412}
 .diag{padding:12px 16px;border-radius:10px;background:var(--card);border:1px solid var(--line);margin-bottom:14px;border-left:5px solid var(--mute)}
+.advice{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-bottom:12px;border-left:5px solid var(--mute)}
+.advice.ok{border-left-color:var(--ok)}.advice.warn{border-left-color:var(--warn)}.advice.bad{border-left-color:var(--bad)}
+.advice .ovh{font-size:15px;margin-bottom:6px}.advice .ovh small{color:var(--mute);margin-left:8px}
+.advice .sec{padding:6px 0;border-top:1px solid var(--line)}.advice .sh{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}.advice .sh b{min-width:200px}.advice .ss{color:var(--ink);font-size:13px}
+.advice ul{margin:4px 0 0 26px;padding-left:16px;color:var(--mute);font-size:12px}.advice li{margin:2px 0}
+.i{display:inline-block;width:14px;height:14px;line-height:14px;text-align:center;border-radius:50%;background:#e8edf3;color:#64748b;font-size:10px;cursor:help;margin-left:3px;vertical-align:1px;font-weight:400;font-style:normal}.i:hover,.i:focus{background:var(--acc);color:#fff;outline:0}
+#gtip{position:fixed;z-index:60;max-width:300px;background:#16202e;color:#fff;padding:8px 11px;border-radius:8px;font-size:12px;line-height:1.55;display:none;pointer-events:none;box-shadow:0 4px 14px #0004}
 .diag.ok{border-left-color:var(--ok)}.diag.local,.diag.upstream,.diag.target{border-left-color:var(--warn)}
 .diag small{color:var(--mute)}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;border-top:4px solid var(--mute)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(172px,1fr));gap:8px;margin-bottom:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 11px;border-top:3px solid var(--mute)}
 .card.Excellent,.card.Good{border-top-color:var(--ok)}.card.Moderate{border-top-color:var(--warn)}.card.Poor{border-top-color:var(--bad)}.card.dead{border-top-color:#94a3b8;background:#f8fafc}.card.dead .big{color:var(--mute);font-size:22px;line-height:40px}.deadnote{font-size:11px;color:var(--mute);margin-top:6px}
-.card h4{margin:0 0 4px;font-size:13px;color:var(--mute);display:flex;justify-content:space-between}
-.card .big{font-size:30px;font-weight:600}.card .big.to{color:var(--bad)} .card .big small{font-size:13px;color:var(--mute);font-weight:400}
-.card dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:8px 0 0;color:var(--mute);font-size:12px} .card dd{margin:0;text-align:right;color:var(--ink)}
+.card h4{margin:0 0 2px;font-size:12px;color:var(--mute);display:flex;justify-content:space-between}
+.card .big{font-size:22px;font-weight:600}.card .big.to{color:var(--bad)} .card .big small{font-size:13px;color:var(--mute);font-weight:400}
+.card dl{display:grid;grid-template-columns:auto 1fr;gap:1px 8px;margin:5px 0 0;color:var(--mute);font-size:11px}.card .far{font-size:10px;color:var(--mute);margin-top:2px} .card dd{margin:0;text-align:right;color:var(--ink);white-space:nowrap}.card dt{white-space:nowrap}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
 .panel h3{margin:0 0 10px;font-size:15px} .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
 .row button,.btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:5px 11px;cursor:pointer;font-size:13px}
 .row button.on,.btn.on,.btn.pri{background:var(--acc);color:#fff;border-color:var(--acc)}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--mute);margin-top:6px}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px}
-svg.chart{width:100%;height:260px;display:block} .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
+svg.chart{width:100%;height:400px;display:block} .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
 table{border-collapse:collapse;width:100%} td,th{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left;font-size:13px} th{color:var(--mute);font-weight:500}
 td.k{color:var(--mute);width:38%} .mask{cursor:pointer;color:var(--acc);margin-left:8px;font-size:12px}
 ul.list{margin:0;padding-left:18px} ul.list li{margin:3px 0} small.m{color:var(--mute)} .hint{color:var(--mute);font-size:12px}
@@ -42,18 +49,17 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
 <main>
 <section id="live" class="on">
   <div id="busybar"></div><div id="vpnbar"></div>
-  <div id="diag" class="diag"></div>
+  <div id="diag" class="advice"></div>
   <div id="cards" class="cards"></div>
   <details class="panel" id="mosinfo"><summary style="cursor:pointer;font-weight:600">❓ MOS 是什麼？怎麼看？</summary>
   <p><b>MOS（Mean Opinion Score）＝通話品質分</b>。電信業用它回答一個問題：<b>現在用這條網路打視訊或語音通話，聽起來順不順？</b>本工具用延遲、抖動、丟包換算出近似值（簡化的 ITU-T E-model），範圍 1～4.5。</p>
   <table><tr><th>MOS</th><th>白話意思</th></tr><tr><td>4.3 以上</td><td>極佳：通話幾乎感覺不到網路存在</td></tr><tr><td>4.0 – 4.3</td><td>良好：多數人不會察覺問題</td></tr><tr><td>3.6 – 4.0</td><td>尚可：偶爾有點延遲或雜音，部分人會注意到</td></tr><tr><td>3.1 – 3.6</td><td>不佳：明顯卡頓、搶話</td></tr><tr><td>3.1 以下</td><td>很差：通話困難</td></tr></table>
   <p class="hint">• MOS 對「偶爾的尖峰」比較寬容，所以它可能是「良好」、但下方的分數（嚴格版，看平均與抖動）卻是 Poor——兩者回答的問題不同：MOS＝通話順不順，分數＝整體網路穩不穩。<br>• 開 VPN 時延遲會包含繞到 VPN 伺服器的距離，分數會偏低，但 MOS 通常仍不錯。<br>• 滿分約 4.4（理想網路也到不了 4.5）。</p></details>
-<div class="panel"><h3>延遲走勢（毫秒，愈低愈好）</h3>
+<div class="panel"><h3>延遲走勢 <small class="hint">（毫秒，愈低愈好）</small><span class="i" tabindex="0" data-g="latency">ⓘ</span></h3>
     <div class="row" id="ranges"></div><svg id="chart" class="chart"></svg><div id="legend" class="legend"></div>
     <div class="hint">灰色虛線＝網路環境變化（VPN 開關、換 Wi-Fi 頻道等）；淡藍點線＝Wi-Fi 資訊更新（macOS 會掃描，可能造成尖峰）。1 小時以內為平均值，24 小時以上為每分鐘平均。</div></div>
-  <div class="panel"><h3>抖動分析 <small class="hint">（最近 5 分鐘的尖峰規律與可能原因）</small></h3><div id="jit" class="hint">分析中…</div></div>
   <div class="grid">
-    <div class="panel"><h3>網路環境 <button class="btn" id="wifiref" style="float:right;font-size:12px" title="會觸發 macOS 掃描 Wi-Fi，可能造成短暫延遲跳動">更新 Wi-Fi 資訊</button></h3><table id="env"></table></div>
+    <div class="panel"><h3>網路環境 <button class="btn" id="wifiref" style="float:right;font-size:12px" title="會觸發 macOS 掃描 Wi-Fi，可能造成短暫延遲跳動">更新 Wi-Fi 資訊</button></h3><div id="env"></div></div>
     <div class="panel"><h3>最近警示與事件</h3><ul class="list" id="alerts"></ul></div>
   </div>
 </section>
@@ -96,7 +102,7 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
     <label><input type="checkbox" id="s_anotif"> 同時跳出 macOS 通知</label>
     <label>連續逾時達 <input type="number" id="s_ato" min="2" max="120"> 次</label>
     <label>近 1 分鐘丟包率達 <input type="number" id="s_aloss" min="1" max="100"> %</label>
-    <label>近 1 分鐘 p95 延遲達 <input type="number" id="s_ap95" min="10" max="5000"> ms</label>
+    <label>近 1 分鐘「慢的時候」<span class="i" tabindex="0" data-g="p95">ⓘ</span> 延遲達 <input type="number" id="s_ap95" min="10" max="5000"> ms</label>
     <label>同一類警示，<input type="number" id="s_acd" min="10" max="3600"> 秒內只通知一次</label></div></div>
   <details class="panel"><summary style="cursor:pointer;font-weight:600">進階：下載測試網址</summary>
     <div class="hint">留空使用預設（Cloudflare）。網址必須是 https，並用 <code>{bytes}</code> 代表要下載的位元組數。</div>
@@ -112,13 +118,56 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
     <div class="hint">一站一站看延遲。「—」代表該節點不回應（很常見，不代表有問題）；要注意的是延遲從某一跳開始升高、之後都維持高檔。</div></div>
 </section>
 </main>
+<div id="gtip"></div>
 <script>
 const $=s=>document.querySelector(s), COL=["#0891b2","#7c3aed","#ea580c","#16a34a","#db2777","#64748b"];
 const RN={"5m":"5 分鐘","1h":"1 小時","24h":"24 小時","7d":"7 天"}, esc=s=>String(s??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
 const J=async u=>{const r=await fetch(u);if(!r.ok)throw new Error(r.status);return r.json()};
 const fmt=v=>v==null?"—":(+v).toFixed(v>=100?0:1), tm=t=>new Date(t*1000).toLocaleTimeString("zh-TW",{hour12:false});
+const GL={
+latency:"延遲：資料送出去再回來所花的時間，單位毫秒（ms，1 秒＝1000 ms）。越低越好；一般上網 50 ms 內很順，視訊或遊戲 100 ms 內都還可以。",
+p95:"慢的時候（技術名稱 p95）：把所有測量由快排到慢，100 次裡有 95 次比這個數字快。平均會把偶爾的卡頓藏起來，看這個數字更接近你『感覺到卡』的時候。",
+avg:"平均：所有測量的平均延遲。",
+jitter:"抖動：延遲忽快忽慢的程度。視訊、語音、遊戲最怕抖動。5 ms 以內很穩，超過 30 ms 就會明顯卡頓。",
+loss:"丟包：送出去卻沒有收到回應的比例。理想是 0%；持續超過 1% 通常就會感覺到卡頓或畫面停格。",
+score:"分數：把延遲、抖動、丟包綜合成 0–100 分。距離遠的伺服器（例如在海外）延遲本來就高，分數會偏低，不代表你的網路不好。",
+mos:"MOS：通話品質分（1–4.5），4.3 以上極佳、4.0 以上良好、3.6 以上尚可，低於 3.1 通話很差。",
+gateway:"路由器（也叫閘道）：家裡的網路分享器，你的裝置連上網際網路的第一站。到它這一段不穩，問題就在你家這一端。",
+localip:"本機 IP：這台電腦在家裡網路中的位址，像門牌號碼。",
+mtu:"MTU：一次最多能傳送的資料封包大小，一般是 1500，通常完全不用管。設定錯誤時（常見於 VPN）才會出現『小測試正常、大檔案卡住』。",
+dns:"DNS：把網址（例如 google.com）翻成數字位址的服務，像網路電話簿。它慢或壞掉時，網頁會一直轉圈圈。",
+vpn:"VPN：把你的網路流量先繞到另一台伺服器再出去的加密通道。會讓延遲變高，這是正常的。",
+proxy:"Proxy（代理伺服器）：上網前要先經過的中繼站。一般家用都是『無』。",
+ipv6:"IPv6：新版網路位址格式，位址數量比舊版（IPv4）多很多。可用代表你的網路支援它，不影響一般使用。",
+wifi:"Wi-Fi 連線：頻段（2.4 或 5 GHz）像不同的道路：2.4 穿牆好但很擁擠，5 較快、干擾較少。頻道像車道，鄰居用同一條會互相干擾。頻寬（20/40/80 MHz）是車道寬度：愈寬愈快，但在鄰居很多的地方也愈容易被干擾。",
+signal:"訊號強度（dBm）：數字越接近 0 越強。-50 以上極佳、-60 良好、-67 尚可、-70 以下偏弱。",
+noise:"雜訊：環境中的背景干擾，數字越小（越負）越好，-90 以下算很乾淨。",
+snr:"訊噪比（SNR）：訊號比雜訊強多少，越大越好。40 以上極佳、25–40 良好、15–25 偏低、15 以下很差。",
+txrate:"傳輸速率：電腦和路由器之間『理論上』的連線速度，不是實際上網速度，實際通常只有一半甚至更低。",
+publicip:"對外 IP：網站看到的你的位址，由網路業者（ISP）分配，預設遮蔽以保護隱私。",
+isp:"ISP（網路業者）：提供你上網服務的公司，例如中華電信。",
+spike:"尖峰：延遲突然變很高的瞬間。",
+timeout:"逾時：等了一段時間都沒有收到回應。",
+where:"把問題分成三段：你這一端（到路由器）、路由器之後（網路業者或遠端）、單一目標自己的問題。"};
+const ti=k=>GL[k]?`<span class="i" tabindex="0" data-g="${k}">ⓘ</span>`:"";
+(()=>{const t=document.getElementById("gtip");let cur=null;
+  const show=el=>{const g=GL[el.dataset.g];if(!g)return;cur=el;t.textContent=g;t.style.display="block";const r=el.getBoundingClientRect();
+    let x=Math.min(Math.max(8,r.left-8),innerWidth-t.offsetWidth-8),y=r.bottom+8;if(y+t.offsetHeight>innerHeight-8)y=r.top-t.offsetHeight-8;t.style.left=x+"px";t.style.top=y+"px";};
+  const hide=()=>{t.style.display="none";cur=null;};
+  document.addEventListener("mouseover",e=>{const el=e.target.closest&&e.target.closest(".i");if(el)show(el);});
+  document.addEventListener("mouseout",e=>{if(e.target.closest&&e.target.closest(".i"))hide();});
+  document.addEventListener("focusin",e=>{const el=e.target.closest&&e.target.closest(".i");if(el)show(el);});
+  document.addEventListener("focusout",hide);
+  document.addEventListener("click",e=>{const el=e.target.closest&&e.target.closest(".i");if(el)(cur===el?hide():show(el));else hide();});})();
+const lvIcon={ok:"🟢",warn:"🟡",bad:"🔴",info:"ℹ️"};
+const secG={where:"where",wifi:"wifi",router:"gateway",external:"latency",jitter:"jitter",dns:"dns",vpn:"vpn"};
+function drawAdvice(a){const o=a.overall;
+  $("#diag").className="advice "+o.level;
+  $("#diag").innerHTML=`<div class="ovh"><b>${lvIcon[o.level]} 整體網路建議：${esc(o.title)}</b><small>${esc(o.detail)}</small></div>`+a.sections.map(s=>
+    `<div class="sec"><div class="sh"><span>${lvIcon[s.level]}</span><b>${esc(s.title)}${ti(secG[s.key])}</b><span class="ss">${esc(s.summary)}</span></div>${s.tips.length?`<ul>${s.tips.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:""}</div>`).join("");}
+const snrLb=v=>v>=40?"極佳":v>=25?"良好":v>=15?"偏低":"很差", noiseLb=v=>v<=-90?"很乾淨":v<=-80?"正常":"偏吵";
 const mosTip="MOS＝通話品質分（1–4.5）：4.3+極佳、4.0+良好、3.6+尚可、3.1 以下很差";
-let deadNames=new Set(), latest={}, range="5m", hrange="1h", htarget=null, targets=[], shown={};
+let routerName=null, deadNames=new Set(), latest={}, range="5m", hrange="1h", htarget=null, targets=[], shown={};
 
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll("nav button,section").forEach(e=>e.classList.remove("on"));
@@ -130,7 +179,7 @@ function ranges(el,cur,set){el.innerHTML=Object.keys(RN).map(k=>`<button class="
 
 /* ---------- 折線圖（自繪 SVG，不依賴外部函式庫） ---------- */
 function plot(svg,series,events){
-  const W=1000,H=260,L=46,R=10,T=10,B=24; let all=[];
+  const W=1000,H=400,L=46,R=10,T=10,B=24; let all=[];
   series.forEach(s=>s.pts.forEach(p=>p.v!=null&&all.push(p)));
   if(!all.length){svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.innerHTML=`<text x="${W/2}" y="${H/2}" text-anchor="middle" fill="#6b7788">資料收集中…</text>`;return;}
   const t0=Math.min(...all.map(p=>p.t)),t1=Math.max(...all.map(p=>p.t),t0+1);
@@ -201,32 +250,34 @@ function cards(sum){
     if(s.unreachable)return `<div class="card dead"><h4><span>${esc(t.name)}</span><span>—</span></h4><div class="big">無回應</div><div class="deadnote">這個位址持續不回應 ping，但其他目標正常（開 VPN 時常見）。已暫停對它的警示與判讀；可到「設定」頁刪除。</div></div>`;
     return `<div class="card ${s.grade||""}"><h4><span>${esc(t.name)}</span><span title="${mosTip}">MOS ${fmt(s.mos)}</span></h4>
     <div class="big ${to?"to":""}">${cur===undefined?"—":to?"逾時":fmt(cur)}<small> ${cur>=0&&cur!==null?"ms":""}</small></div>
-    <dl><dt>平均 / p95</dt><dd>${fmt(s.avg)} / ${fmt(s.p95)}</dd><dt>抖動</dt><dd>${fmt(s.jitter)}</dd><dt>丟包</dt><dd>${s.loss_pct??"—"}%</dd><dt>分數</dt><dd>${fmt(s.score)} ${s.grade||""}</dd></dl></div>`;}).join("");
+    <dl><dt>平均 / 慢的時候${ti("p95")}</dt><dd>${fmt(s.avg)} / ${fmt(s.p95)}</dd><dt>抖動${ti("jitter")}</dt><dd>${fmt(s.jitter)}</dd><dt>丟包${ti("loss")}</dt><dd>${s.loss_pct??"—"}%</dd><dt>分數${ti("score")}</dt><dd>${fmt(s.score)} ${s.grade||""}</dd></dl>${s.avg>50&&(s.jitter??99)<10&&(s.loss_pct??9)<1&&t.name!==routerName?`<div class="far">距離較遠，偏慢屬正常</div>`:""}</div>`;}).join("");
 }
 const priv={ssid:true,ip:true};
 function maskable(key,text){return priv[key]?`${"•".repeat(8)}<span class="mask" onclick="priv['${key}']=false;side()">顯示</span>`:`${esc(text)}<span class="mask" onclick="priv['${key}']=true;side()">隱藏</span>`;}
 async function side(){
   try{
-    const [d,sum,e,al,ev]=await Promise.all([J("/api/diagnosis"),J("/api/summary?range=5m"),J("/api/env"),J("/api/alerts"),J("/api/events")]);
-    $("#diag").className="diag "+(d.code||"");
-    $("#diag").innerHTML=`<b>判讀：${esc(d.title)}</b><br><small>${esc(d.detail)}${d.gateway_ip?`（路由器 ${esc(d.gateway_ip)}）`:""}</small>`;
+    const [d,sum,e,al,ev]=await Promise.all([J("/api/advice"),J("/api/summary?range=5m"),J("/api/env"),J("/api/alerts"),J("/api/events")]);
+    drawAdvice(d);
     cards(sum.targets);
     const hh=(await J("/api/health")).engine;
     $("#busybar").innerHTML=hh.ok?"":`<div class="banner">⚠️ 本機偏忙：量測可能受影響，逾時不一定是網路問題（詳見「設定」頁底部的引擎健康度）。</div>`;
     const v=e.env.vpn||{};
     $("#vpnbar").innerHTML=v.active?`<div class="banner">🔒 VPN 開啟中（${esc(v.interface)}）：所有延遲都包含「繞到 VPN 伺服器」的距離，分數會偏低；路由器那一列才是你家到路由器的真實狀況。</div>`:"";
+    routerName=(await J("/api/diagnosis")).router;
     const w=e.wifi, en=e.env, pub=e.public;
     const R=(k,val)=>`<tr><td class="k">${k}</td><td>${val}</td></tr>`;
-    let h=R("連線",esc(en.interface_type||"—")+(en.interface?` (${esc(en.interface)})`:""))+R("路由器",esc(en.gateway||"—"))+R("本機 IP",esc(en.local_ip||"—"))+R("MTU",en.mtu||"—");
-    h+=R("VPN",v.active?`開啟（${esc(v.interface)}）`:"未開啟");
-    h+=R("DNS",(en.dns||[]).map(x=>esc(x)+(x.startsWith("100.64.")||x.startsWith("10.")&&v.active?" <small class='m'>(VPN)</small>":"")).join("<br>")||"—");
-    h+=R("Proxy",(en.proxy||[]).join("、")||"無")+R("IPv6",en.ipv6?"可用":(en.ipv6_via_vpn_only?"不可用（VPN 期間通常會停用）":"不可用"));
-    if(w){h+=R("Wi-Fi",`${esc(w.phy||"")} ・ ${esc(w.band||"")} 頻道 ${w.channel??"—"}（${esc(w.width||"")}）`)+
-      R("訊號",`${w.signal_dbm} dBm（${esc(w.signal_label)}）／雜訊 ${w.noise_dbm} dBm／SNR ${w.snr_db} dB`)+R("傳輸速率",`${w.tx_rate_mbps} Mbps`)+
-      R("網路名稱",w.ssid?maskable("ssid",w.ssid):"系統未提供（macOS 隱私限制）");}
-    h+=R("對外 IP",pub&&pub.ip?maskable("ip",pub.ip)+(v.active?"<br><small class='m'>這是 VPN 出口，不是你的 ISP</small>":""):"未查詢");
-    if(pub&&pub.org)h+=R(v.active?"出口業者":"ISP",esc(pub.org));
-    $("#env").innerHTML=h;
+    const dn=e.dns_names||{};
+    let h=R("連線",esc(en.interface_type||"—")+(en.interface?` (${esc(en.interface)})`:""))+R("路由器"+ti("gateway"),esc(en.gateway||"—"))+R("本機 IP"+ti("localip"),esc(en.local_ip||"—"));
+    h+=R("VPN"+ti("vpn"),v.active?`開啟（${esc(v.interface)}）`:"未開啟");
+    h+=R("DNS"+ti("dns"),(en.dns||[]).map(x=>esc(x)+(dn[x]?` <small class='m'>・${esc(dn[x].name)}</small>`:"")+(x.startsWith("100.64.")||x.startsWith("10.")&&v.active?" <small class='m'>(VPN)</small>":"")).join("<br>")||"—");
+    if(w){h+=R("Wi-Fi"+ti("wifi"),`${esc(w.phy||"")} ・ ${esc(w.band||"")} 頻道 ${w.channel??"—"}（${esc(w.width||"")}）`)+
+      R("訊號強度"+ti("signal"),`${w.signal_dbm} dBm（${esc(w.signal_label)}）`)+R("雜訊"+ti("noise"),`${w.noise_dbm} dBm（${noiseLb(w.noise_dbm)}）`)+R("訊噪比"+ti("snr"),`${w.snr_db} dB（${snrLb(w.snr_db)}）`)+R("傳輸速率"+ti("txrate"),`${w.tx_rate_mbps} Mbps`);}
+    h+=R("對外 IP"+ti("publicip"),pub&&pub.ip?maskable("ip",pub.ip)+(v.active?"<br><small class='m'>這是 VPN 出口，不是你的 ISP</small>":""):"未查詢");
+    if(pub&&pub.org)h+=R((v.active?"出口業者":"ISP")+ti("isp"),esc(pub.org));
+    let adv=R("MTU"+ti("mtu"),en.mtu||"—")+R("Proxy"+ti("proxy"),(en.proxy||[]).join("、")||"無")+R("IPv6"+ti("ipv6"),en.ipv6?"可用":(en.ipv6_via_vpn_only?"不可用（VPN 期間通常會停用）":"不可用"));
+    if(w)adv+=R("網路名稱",w.ssid?maskable("ssid",w.ssid):"系統未提供（macOS 隱私限制）");
+    h+=`</table><details style="margin-top:8px"><summary style="cursor:pointer;color:var(--mute);font-size:12px">進階資訊（MTU、Proxy、IPv6…）</summary><table>${adv}</table></details><table>`;
+    $("#env").innerHTML=`<table>${h}</table>`;
     const items=[...al.map(a=>({ts:a.ts,t:"⚠️ "+a.message})),...ev.filter(x=>!x.minor).map(x=>({ts:x.ts,t:"🔄 "+x.text}))].sort((a,b)=>b.ts-a.ts).slice(0,12);
     $("#alerts").innerHTML=items.length?items.map(x=>`<li>${tm(x.ts)} ${esc(x.t)}</li>`).join(""):"<li><small class='m'>尚無</small></li>";
   }catch(e){}
@@ -276,7 +327,7 @@ function renderReport(t){
     <td><a href="/api/export.csv?target=${encodeURIComponent(n)}&since=${r.since}&until=${r.until}">CSV</a></td></tr>`).join("");
   $("#treport").innerHTML=`<div class="diag"><b>判讀：${esc(r.diagnosis.title)}</b><br><small>${esc(r.diagnosis.detail)}</small></div>`+
    (t.vpn?`<div class="banner">🔒 測試開始時 VPN 為開啟狀態，延遲包含繞到 VPN 伺服器的距離。</div>`:"")+
-   `<table><tr><th>目標</th><th>平均</th><th>p50</th><th>p95</th><th>最高</th><th>抖動</th><th>丟包</th><th>MOS</th><th>分數</th><th>原始資料</th></tr>${rows}</table>`+
+   `<table><tr><th>目標</th><th>平均</th><th>中位數</th><th>慢的時候<span class="i" tabindex="0" data-g="p95">ⓘ</span></th><th>最高</th><th>抖動<span class="i" tabindex="0" data-g="jitter">ⓘ</span></th><th>丟包<span class="i" tabindex="0" data-g="loss">ⓘ</span></th><th>MOS<span class="i" tabindex="0" data-g="mos">ⓘ</span></th><th>分數<span class="i" tabindex="0" data-g="score">ⓘ</span></th><th>原始資料</th></tr>${rows}</table>`+
    `<p class="hint">期間 ${tm(r.since)} – ${tm(r.until)}，警示 ${r.alerts.length} 則，環境變化 ${r.events.length} 次${r.events.length?"："+r.events.map(e=>esc(e.text)).join("、"):""}。</p>`+
    (r.curl.length?`<p class="hint">期間下載測試：${r.curl.map(c=>c.ok?c.mbps+" Mbps":"失敗").join("、")}</p>`:"")+
    `<div class="row"><button class="btn" onclick="window.print()">列印／存成 PDF</button></div>`;}
@@ -289,15 +340,10 @@ async function loadCurl(){try{const d=await J("/api/curl");
   $("#clist").innerHTML=d.results.length?`<table><tr><th>時間</th><th>大小</th><th>速度</th><th>連線</th><th>首位元組</th><th>總時間</th><th>備註</th></tr>`+d.results.map(c=>
     `<tr><td>${tm(c.ts)}</td><td>${c.ok?(c.bytes/1e6).toFixed(0)+" MB"+(c.partial?`（原定 ${c.mb||""} MB）`:""):"—"}</td><td>${c.ok?c.mbps+" Mbps":"失敗"}</td><td>${c.connect_ms??"—"} ms</td><td>${c.ttfb_ms??"—"} ms</td><td>${c.seconds??"—"} s</td><td>${c.partial?"時間到，只算已下載的部分 ":""}${esc(c.error||"")}${c.vpn?" 🔒VPN":""}</td></tr>`).join("")+`</table>`:"";}catch(e){}}
 setInterval(pollTest,2000);pollTest();loadCurl();
-async function loadJit(){try{const j=await J("/api/jitter?range=5m");
-  if(!j.ok){$("#jit").textContent=j.reason||"資料不足";return;}
-  $("#jit").innerHTML=`<div>每分鐘尖峰 <b>${j.per_min}</b> 次｜基準 ${fmt(j.baseline_ms)} ms｜${j.period_s?`約每 <b>${j.period_s} 秒</b>一次（規律度 ${Math.round(j.regularity*100)}%）`:"沒有明顯週期"}｜${j.subject_is_router?"分析對象：路由器":"分析對象：第一個外部目標"}</div><ul>`+j.findings.map(f=>`<li>${esc(f)}</li>`).join("")+`</ul>`;
-}catch(e){}}
-setInterval(loadJit,10000);loadJit();
 async function loadReports(){try{const L=await J("/api/reports");
   if(!L.length){$("#rlist").innerHTML='<div class="hint">還沒有報告。跑一次定時測試後會出現在這裡。</div>';return;}
   const c=x=>x==null?"—":x;
-  $("#rlist").innerHTML=`<div style="overflow-x:auto"><table><tr><th>標籤</th><th>時間</th><th>路由器 平均</th><th>路由器 p95</th><th>路由器 抖動</th><th>外部 平均</th><th>外部 p95</th><th>外部 抖動</th><th>尖峰/分</th><th>週期</th><th></th></tr>`+L.map(r=>{const R=r.router||{};
+  $("#rlist").innerHTML=`<div style="overflow-x:auto"><table><tr><th>標籤</th><th>時間</th><th>路由器 平均</th><th>路由器 慢的時候</th><th>路由器 抖動</th><th>外部 平均</th><th>外部 慢的時候</th><th>外部 抖動</th><th>尖峰/分<span class="i" tabindex="0" data-g="spike">ⓘ</span></th><th>週期</th><th></th></tr>`+L.map(r=>{const R=r.router||{};
     return `<tr><td>${esc(r.label)}</td><td>${tm(r.started)}</td><td>${fmt(R.avg)}</td><td>${fmt(R.p95)}</td><td>${fmt(R.jitter)}</td><td>${fmt(r.external.avg)}</td><td>${fmt(r.external.p95)}</td><td>${fmt(r.external.jitter)}</td><td>${c(r.spikes.per_min)}</td><td>${r.spikes.period_s?r.spikes.period_s+" s":"—"}</td>
     <td style="white-space:nowrap"><button class="btn" data-rn="${r.id}">改名</button> <button class="btn" data-rd="${r.id}">刪除</button></td></tr>`}).join("")+`</table></div>`;
   $("#rlist").querySelectorAll("[data-rn]").forEach(b=>b.onclick=async()=>{const v=prompt("新的標籤");if(!v)return;const x=await fetch("/api/reports/"+b.dataset.rn,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({label:v})});if(!x.ok)alert((await x.json()).detail);loadReports();});
@@ -309,7 +355,7 @@ setInterval(loadReports,15000);loadReports();
 /* ---------- 設定 ---------- */
 let sTargets=[],dragFrom=null;
 function drawTargets(){
-  $("#stargets").innerHTML=`<tr><th style="width:34px"></th><th style="width:30%">名稱</th><th>位址（網址或 IP）</th><th style="width:120px" title="空白＝使用下方全域門檻">p95 警示門檻 ms</th><th style="width:60px" title="勾選後，不對這個目標發延遲／丟包警示（連續逾時仍會警示）">靜音</th><th style="width:170px">順序／刪除</th></tr>`+sTargets.map((t,i)=>
+  $("#stargets").innerHTML=`<tr><th style="width:34px"></th><th style="width:30%">名稱</th><th>位址（網址或 IP）</th><th style="width:120px" title="空白＝使用下方全域門檻">「慢的時候」(p95) 警示門檻 ms</th><th style="width:60px" title="勾選後，不對這個目標發延遲／丟包警示（連續逾時仍會警示）">靜音</th><th style="width:170px">順序／刪除</th></tr>`+sTargets.map((t,i)=>
     `<tr data-row="${i}"><td class="handle" title="按住拖曳，調整順序">⠿</td><td><input type="text" data-i="${i}" data-f="name" value="${esc(t.name)}"></td><td><input type="text" data-i="${i}" data-f="host" value="${esc(t.host)}"></td><td><input type="number" min="10" max="5000" placeholder="全域" data-i="${i}" data-f="p95_ms" value="${t.p95_ms??""}"></td><td><input type="checkbox" data-i="${i}" data-f="mute" ${t.mute?"checked":""}></td><td style="white-space:nowrap"><button class="btn" data-up="${i}" ${i===0?"disabled":""} title="往上移">↑</button> <button class="btn" data-dn="${i}" ${i===sTargets.length-1?"disabled":""} title="往下移">↓</button> <button class="btn" data-del="${i}" ${sTargets.length<=1?"disabled":""}>刪除</button></td></tr>`).join("");
   $("#stargets").querySelectorAll("input").forEach(e=>e.oninput=()=>{const t=sTargets[+e.dataset.i];t[e.dataset.f]=e.type==="checkbox"?e.checked:e.value;});
   $("#stargets").querySelectorAll("tr[data-row]").forEach(tr=>{          // 拖拉排序（HTML5 Drag & Drop）
@@ -338,7 +384,7 @@ function fillSettings(d){
 }
 async function loadHealth(){try{const h=(await J("/api/health")).engine,f=v=>v==null?"—":v+" ms";
   $("#ehealth").innerHTML=`<b style="color:${h.ok?"#16a34a":"#dc2626"}">${h.ok?"✅ 正常：本程式沒有被拖慢，逾時多半是網路本身的問題":"⚠️ 本機偏忙：量測可能受影響（關閉其他吃資源的程式，或減少目標／加大間隔）"}</b><br>
-  每次 ping 的額外耗時（啟動 ping、讀輸出）：中位 ${f(h.overhead_ms.p50)}、p95 ${f(h.overhead_ms.p95)}、最高 ${f(h.overhead_ms.max)}（正常通常 &lt; 50 ms）<br>
+  每次 ping 的額外耗時（啟動 ping、讀輸出）：中位 ${f(h.overhead_ms.p50)}、慢的時候 ${f(h.overhead_ms.p95)}、最高 ${f(h.overhead_ms.max)}（正常通常 &lt; 50 ms）<br>
   程式排程延遲：中位 ${f(h.loop_lag_ms.p50)}、p95 ${f(h.loop_lag_ms.p95)}、最高 ${f(h.loop_lag_ms.max)}（正常 &lt; 100 ms）<br>
   已量測 ${h.pings} 次，其中「ping 被強制結束」${h.hung_pings} 次（目標不回應時偶爾會發生，占比不高就不用擔心）；目前 ${h.targets} 個目標、每 ${h.interval_sec} 秒一次。`;}catch(e){}}
 async function loadSettings(){try{fillSettings(await J("/api/settings"));}catch(e){}loadHealth();}

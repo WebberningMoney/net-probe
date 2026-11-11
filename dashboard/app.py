@@ -22,6 +22,8 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 import gateway
 import netenv
 import traceroute as trace_mod
+import advice as advice_mod
+import dns_info
 import jitter as jitter_mod
 import settings as settings_mod
 import speedtest
@@ -67,6 +69,7 @@ class Engine:
         self.router_name = gw.get("name", "路由器") if self.gateway_enabled else None
         self.gateway_ip = None
         self._last_gw_check = -10**9
+        self.dns_names: dict = {}          # {DNS 伺服器 IP: {name, source}}
         self.windows: dict = {}            # 每個目標最近 60 筆結果（給告警用，免查資料庫）
         self.alerts = AlertManager(cfg.get("alerts"), self.router_name, notifier, self._per_target(cfg))
         self.loop = None                   # 伺服器的 event loop（關閉時要用）
@@ -163,7 +166,16 @@ class Engine:
         self._wifi_busy = True
         self.events.append({"ts": int(time.time()), "minor": True,
                             "text": "Wi-Fi 詳細資訊更新（macOS 會掃描周圍網路，可能造成短暫延遲跳動）"})
-        asyncio.create_task(self._refresh_wifi())
+        coro = self._refresh_wifi()
+        try:
+            asyncio.get_running_loop()
+            asyncio.create_task(coro)
+        except RuntimeError:                              # 從網頁請求的執行緒呼叫：交給主事件迴圈
+            if self.loop is None:
+                coro.close()
+                self._wifi_busy = False
+                return False
+            asyncio.run_coroutine_threadsafe(coro, self.loop)
         return True
 
     async def _refresh_wifi(self) -> None:
@@ -184,10 +196,27 @@ class Engine:
         if self._fp is not None and (self._fp["gateway"], self._fp["vpn"]) != (fp["gateway"], fp["vpn"]):
             self.public = None                             # 網路換了，舊的對外 IP 作廢
         self._fp = fp
+        self._lookup_dns_missing()
         if self.public is None and self.public_lookup and self.env.get("interface"):
             self.public = {}                               # 佔位，避免重複查詢
             if self.loop:
                 asyncio.create_task(self._lookup_public())
+
+    def _lookup_dns_missing(self) -> None:
+        """DNS 伺服器是誰提供的：內建名單立刻有，認不出來的在背景查（RDAP，需「查詢對外 IP」開啟）。"""
+        for ip in (self.env or {}).get("dns", []):
+            if ip in self.dns_names:
+                continue
+            c = dns_info.classify(ip)
+            if c:
+                self.dns_names[ip] = c
+            else:
+                self.dns_names[ip] = {"name": "查詢中…", "source": "pending"}
+                if self.loop:
+                    asyncio.create_task(self._dns_lookup(ip))
+
+    async def _dns_lookup(self, ip: str) -> None:
+        self.dns_names[ip] = await asyncio.to_thread(dns_info.lookup, ip, self.public_lookup)
 
     async def _lookup_public(self) -> None:
         self.public = await asyncio.to_thread(netenv.lookup_public) or {}
@@ -489,6 +518,18 @@ def create_app(cfg: dict | None = None, storage: Storage | None = None,
         return {"range": range, "router": engine.router_name,
                 "gateway_ip": engine.gateway_ip, **engine.diagnosis(range)}
 
+    @app.get("/api/advice")
+    def advice(range: str = "5m"):
+        """整體網路建議：把判讀、Wi-Fi、路由器、外部連線、抖動、DNS、VPN 整理成分段的白話結果。"""
+        if range not in RANGES:
+            raise HTTPException(400, f"range 必須是 {list(RANGES)} 其中之一")
+        try:
+            jit = engine.jitter(int(time.time()) - RANGES[range])
+        except Exception:
+            jit = None
+        return advice_mod.build(engine.summary(range), engine.diagnosis(range), engine.env or {}, engine.wifi,
+                                jit, engine.dns_names, engine.router_name, engine.dead)
+
     @app.get("/api/alerts")
     def alerts():
         return list(engine.alerts.history)
@@ -531,7 +572,7 @@ def create_app(cfg: dict | None = None, storage: Storage | None = None,
     @app.get("/api/env")
     def env():
         """網路環境。SSID／對外 IP 預設由網頁遮蔽，這裡回傳原值（只綁本機）。"""
-        return {"env": engine.env, "wifi": engine.wifi, "public": engine.public or None}
+        return {"env": engine.env, "wifi": engine.wifi, "public": engine.public or None, "dns_names": engine.dns_names}
 
     @app.post("/api/wifi/refresh")
     def wifi_refresh():

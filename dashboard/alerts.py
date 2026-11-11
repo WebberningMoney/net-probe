@@ -78,7 +78,7 @@ class AlertManager:
                 if s["loss_pct"] >= c["loss_pct_1m"]:
                     cands.append(("loss", name, f"{who} 近 1 分鐘丟包率 {s['loss_pct']}%", "warning"))
                 if s["p95"] is not None and s["p95"] >= p95_thr:
-                    cands.append(("p95", name, f"{who} 近 1 分鐘 p95 延遲 {s['p95']} ms", "warning"))
+                    cands.append(("p95", name, f"{who} 近 1 分鐘「慢的時候」(p95) 延遲 {s['p95']} ms", "warning"))
         # 先濾掉冷卻中的，再依規則分組
         by_rule: dict = {}
         for rule, name, message, severity in cands:

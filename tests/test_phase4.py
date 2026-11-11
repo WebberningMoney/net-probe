@@ -425,3 +425,13 @@ def test_per_target_alert_threshold_and_mute():
     names = {x["target"] for x in fired} if fired and "target" in fired[0] else None
     text = " ".join(str(x) for x in fired)
     assert "C" in text and "B 近" not in text and "A 近" not in text
+
+
+def test_wifi_refresh_from_threadpool_does_not_crash(tmp_path):
+    """回歸：網頁請求在執行緒池裡呼叫「更新 Wi-Fi」，不能因為沒有 event loop 而炸掉。"""
+    app = create_app({**CFG, "interval_sec": 1}, Storage(str(tmp_path / "w.db")), _runner, autostart=False)
+    with TestClient(app) as c:
+        r = c.post("/api/wifi/refresh")
+        assert r.status_code == 200 and r.json()["started"] is True
+        assert c.get("/api/advice").status_code == 200
+        assert "dns_names" in c.get("/api/env").json()
