@@ -22,6 +22,7 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 import gateway
 import netenv
 import traceroute as trace_mod
+import jitter as jitter_mod
 import settings as settings_mod
 import speedtest
 import probe
@@ -335,9 +336,40 @@ class Engine:
                 "targets": len(self.targets), "interval_sec": self.cfg.get("interval_sec", 1.0)}
 
     # ---- 定時測試：記下起訖時間，結束時用這段期間的原始資料產生報告 ----
-    def start_test(self, minutes: int | None) -> dict:
+    def context(self) -> dict:
+        """目前的網路條件快照（存進報告，之後比較「有線 vs Wi-Fi」「5 GHz vs 2.4 GHz」時用）。"""
+        e, w = self.env or {}, self.wifi or {}
+        return {"interface": e.get("interface"), "interface_type": e.get("interface_type"),
+                "vpn": bool((e.get("vpn") or {}).get("active")), "gateway": e.get("gateway"),
+                "band": w.get("band"), "channel": w.get("channel"), "width": w.get("width"),
+                "signal_dbm": w.get("signal_dbm"), "tx_rate_mbps": w.get("tx_rate_mbps")}
+
+    @staticmethod
+    def auto_label(c: dict) -> str:
+        parts = [c.get("interface_type") or c.get("interface") or "未知連線"]
+        if c.get("band"):
+            parts.append(f"{c['band']} 頻道 {c.get('channel')}")
+        if c.get("signal_dbm") is not None:
+            parts.append(f"{c['signal_dbm']} dBm")
+        parts.append("VPN 開" if c.get("vpn") else "無 VPN")
+        return "｜".join(parts)
+
+    def jitter(self, since: int, until: int | None = None) -> dict:
+        """分析某段期間的延遲尖峰（路由器優先；沒開路由器就用第一個外部目標）。"""
+        until = until or 10 ** 12
+        series = lambda n: {ts: r for ts, r in self.storage.raw_rows(n, since) if ts <= until}
+        ext = [t["name"] for t in self.targets if t["name"] != self.router_name and t["name"] not in self.dead]
+        if self.router_name and self.gateway_ip and any(t["name"] == self.router_name for t in self.targets):
+            return jitter_mod.analyze(series(self.router_name), {n: series(n) for n in ext}, True)
+        if not ext:
+            return {"ok": False, "reason": "沒有可分析的目標"}
+        return jitter_mod.analyze(series(ext[0]), {n: series(n) for n in ext[1:]}, False)
+
+    def start_test(self, minutes: int | None, label: str = "") -> dict:
         now = int(time.time())
+        ctx = self.context()
         self.test = {"state": "running", "started": now, "minutes": minutes,
+                     "label": label or self.auto_label(ctx), "context": ctx,
                      "ends_at": now + minutes * 60 if minutes else None,
                      "vpn": bool(self.env.get("vpn", {}).get("active")), "report": None}
         return self.test
@@ -348,6 +380,13 @@ class Engine:
             return t
         t.update(state="done", finished=now)
         t["report"] = self.report(t["started"], now)
+        t["report"]["jitter"] = self.jitter(t["started"], now)
+        t["report"]["context"] = t.get("context") or self.context()
+        t["report"]["label"] = t["label"]
+        try:
+            t["report_id"] = self.storage.save_report(t["started"], now, t["label"], t["report"])
+        except Exception as e:
+            print("save report error:", e)
         return t
 
     def report(self, since: int, until: int) -> dict:
@@ -552,7 +591,54 @@ def create_app(cfg: dict | None = None, storage: Storage | None = None,
                 raise HTTPException(400, "minutes 必須是 1–720 的整數")
         if engine.test["state"] == "running":
             raise HTTPException(409, "已有測試正在進行")
-        return engine.start_test(m)
+        label = str(body.get("label", "")).strip()[:40]
+        if "<" in label or ">" in label:
+            raise HTTPException(400, "標籤不可包含 < >")
+        return engine.start_test(m, label)
+
+    @app.get("/api/jitter")
+    def jitter(range: str = "5m"):
+        if range not in RANGES:
+            raise HTTPException(400, f"range 必須是 {list(RANGES)} 其中之一")
+        return {"range": range, **engine.jitter(int(time.time()) - RANGES[range])}
+
+    def _report_row(r):
+        d = r["data"]
+        tg = d.get("targets", {})
+        rn = engine.router_name or "路由器"
+        ext = [v for k, v in tg.items() if k != rn and v.get("avg") is not None and not v.get("unreachable")]
+        med = lambda key: (sorted(v[key] for v in ext if v.get(key) is not None) or [None])[len([1 for v in ext if v.get(key) is not None]) // 2]
+        jt = d.get("jitter") or {}
+        return {"id": r["id"], "started": r["started"], "finished": r["finished"], "label": r["label"],
+                "context": d.get("context", {}), "router": tg.get(rn),
+                "external": {k: med(k) for k in ("avg", "p95", "jitter", "loss_pct")},
+                "spikes": {"per_min": jt.get("per_min"), "period_s": jt.get("period_s")}}
+
+    @app.get("/api/reports")
+    def reports_list():
+        return [_report_row(r) for r in engine.storage.list_reports()]
+
+    @app.get("/api/reports/{rid}")
+    def reports_get(rid: int):
+        r = engine.storage.get_report(rid)
+        if not r:
+            raise HTTPException(404, "找不到這份報告")
+        return r
+
+    @app.patch("/api/reports/{rid}")
+    def reports_rename(rid: int, body: dict):
+        label = str(body.get("label", "")).strip()[:40]
+        if not label or "<" in label or ">" in label:
+            raise HTTPException(400, "標籤不可為空，也不可包含 < >")
+        if not engine.storage.rename_report(rid, label):
+            raise HTTPException(404, "找不到這份報告")
+        return {"ok": True}
+
+    @app.delete("/api/reports/{rid}")
+    def reports_delete(rid: int):
+        if not engine.storage.delete_report(rid):
+            raise HTTPException(404, "找不到這份報告")
+        return {"ok": True}
 
     @app.post("/api/test/stop")
     def test_stop():

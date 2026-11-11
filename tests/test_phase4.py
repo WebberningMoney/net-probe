@@ -367,3 +367,40 @@ def test_wifi_refresh_interval_and_manual(tmp_path):
     asyncio.run(go({"wifi_refresh_sec": 0}, manual=True))
     assert calls["sp"] == 1                                # 手動才查一次
     assert any(e.get("minor") for e in eng.events)
+
+
+def test_reports_saved_listed_renamed_deleted_and_jitter(tmp_path):
+    import random
+    rnd = random.Random(3)
+    t = {"n": 0}
+
+    async def run(cmd):
+        if cmd[0] == "ping":
+            t["n"] += 1
+            spike = (t["n"] // 3) % 5 == 0
+            return 0, f"64 bytes from x: icmp_seq=0 ttl=57 time={90.0 if spike else 5.0 + rnd.random()} ms"
+        return await _runner(cmd)
+    app = create_app({**CFG, "interval_sec": 1}, Storage(str(tmp_path / "r.db")), run, autostart=False)
+    with TestClient(app) as c:
+        eng = app.state.engine
+
+        async def go():
+            await eng.tick()
+            now = int(time.time())
+            eng.start_test(5, "有線")
+            for i in range(70):                                # 偽造 70 秒資料
+                eng.storage.add_rows([(now + i, "A", 5.0 if i % 4 else 90.0), (now + i, "路由器", 5.0 if i % 4 else 90.0)])
+            await eng.tick()
+            eng.finish_test(now + 71)
+        asyncio.run(go())
+        lst = c.get("/api/reports").json()
+        assert len(lst) == 1 and lst[0]["label"] == "有線" and lst[0]["context"]["vpn"] is True
+        rid = lst[0]["id"]
+        full = c.get(f"/api/reports/{rid}").json()
+        assert full["data"]["jitter"]["ok"] and full["data"]["jitter"]["per_min"] > 5
+        assert c.patch(f"/api/reports/{rid}", json={"label": "<x>"}).status_code == 400
+        assert c.patch(f"/api/reports/{rid}", json={"label": "2.4GHz"}).status_code == 200
+        assert c.get("/api/reports").json()[0]["label"] == "2.4GHz"
+        assert c.get("/api/jitter?range=5m").status_code == 200
+        assert c.delete(f"/api/reports/{rid}").status_code == 200 and c.get("/api/reports").json() == []
+        assert c.get("/api/reports/999").status_code == 404

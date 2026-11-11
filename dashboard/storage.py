@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 from typing import Optional
@@ -21,6 +22,10 @@ CREATE TABLE IF NOT EXISTS samples (
   rtt REAL                      -- 毫秒；NULL = 丟包
 );
 CREATE INDEX IF NOT EXISTS idx_samples ON samples(target, ts);
+CREATE TABLE IF NOT EXISTS reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    started INTEGER, finished INTEGER, label TEXT, data TEXT
+);
 CREATE TABLE IF NOT EXISTS minute_agg (
   minute INTEGER NOT NULL,      -- 該分鐘起點（Unix 秒，60 的倍數）
   target TEXT NOT NULL,
@@ -49,6 +54,37 @@ class Storage:
         with self._lock:
             self._db.executemany("INSERT INTO samples VALUES (?,?,?)", rows)
             self._db.commit()
+
+    # ---- 定時測試報告（保存下來，之後可並排比較不同條件的結果）----
+    def save_report(self, started: int, finished: int, label: str, data: dict) -> int:
+        with self._lock:
+            cur = self._db.execute("INSERT INTO reports(started, finished, label, data) VALUES (?,?,?,?)",
+                                   (started, finished, label, json.dumps(data, ensure_ascii=False)))
+            self._db.commit()
+            return cur.lastrowid
+
+    def list_reports(self, limit: int = 100) -> list:
+        with self._lock:
+            rows = self._db.execute("SELECT id, started, finished, label, data FROM reports "
+                                    "ORDER BY started DESC LIMIT ?", (limit,)).fetchall()
+        return [{"id": i, "started": s, "finished": f, "label": l, "data": json.loads(d)} for i, s, f, l, d in rows]
+
+    def get_report(self, rid: int):
+        with self._lock:
+            r = self._db.execute("SELECT id, started, finished, label, data FROM reports WHERE id=?", (rid,)).fetchone()
+        return {"id": r[0], "started": r[1], "finished": r[2], "label": r[3], "data": json.loads(r[4])} if r else None
+
+    def rename_report(self, rid: int, label: str) -> bool:
+        with self._lock:
+            cur = self._db.execute("UPDATE reports SET label=? WHERE id=?", (label, rid))
+            self._db.commit()
+            return cur.rowcount > 0
+
+    def delete_report(self, rid: int) -> bool:
+        with self._lock:
+            cur = self._db.execute("DELETE FROM reports WHERE id=?", (rid,))
+            self._db.commit()
+            return cur.rowcount > 0
 
     def add_rows(self, rows: list) -> None:
         """rows = [(ts, 目標名稱, 毫秒或 None), ...]：一次寫入、一次 commit。"""

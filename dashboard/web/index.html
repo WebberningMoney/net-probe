@@ -51,6 +51,7 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
 <div class="panel"><h3>延遲走勢（毫秒，愈低愈好）</h3>
     <div class="row" id="ranges"></div><svg id="chart" class="chart"></svg><div id="legend" class="legend"></div>
     <div class="hint">灰色虛線＝網路環境變化（VPN 開關、換 Wi-Fi 頻道等）；淡藍點線＝Wi-Fi 資訊更新（macOS 會掃描，可能造成尖峰）。1 小時以內為平均值，24 小時以上為每分鐘平均。</div></div>
+  <div class="panel"><h3>抖動分析 <small class="hint">（最近 5 分鐘的尖峰規律與可能原因）</small></h3><div id="jit" class="hint">分析中…</div></div>
   <div class="grid">
     <div class="panel"><h3>網路環境 <button class="btn" id="wifiref" style="float:right;font-size:12px" title="會觸發 macOS 掃描 Wi-Fi，可能造成短暫延遲跳動">更新 Wi-Fi 資訊</button></h3><table id="env"></table></div>
     <div class="panel"><h3>最近警示與事件</h3><ul class="list" id="alerts"></ul></div>
@@ -65,10 +66,13 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
 <section id="test">
   <div class="panel"><h3>定時測試</h3>
     <div class="row" id="tstart"><button class="btn on" data-m="5">5 分鐘</button><button class="btn" data-m="15">15 分鐘</button><button class="btn" data-m="60">60 分鐘</button><button class="btn" data-m="0">持續監測</button>
-      <input type="text" id="tcustom" placeholder="自訂分鐘（1–720）" style="width:150px"><button class="btn pri" id="tcgo">▶ 開始測試</button></div>
+      <input type="text" id="tcustom" placeholder="自訂分鐘（1–720）" style="width:150px"><input type="text" id="tlabel" maxlength="40" placeholder="標籤（選填，例：有線 / 2.4GHz）" style="width:230px"><button class="btn pri" id="tcgo">▶ 開始測試</button></div>
     <div class="hint" id="tsel"></div>
     <div id="tprog" class="hint"></div><div class="row"><button class="btn" id="tstop" style="display:none">結束並產生報告</button></div>
     <div id="treport"></div></div>
+  <div class="panel"><h3>已保存的測試報告（並排比較）</h3>
+    <div class="hint">每次定時測試結束都會自動保存，並記下當時的連線方式、頻段、訊號。換一個條件（有線 vs Wi-Fi、2.4 vs 5 GHz、換頻道、關 AirDrop）各測一次，就能在這裡比較「哪個條件抖動最少」。</div>
+    <div id="rlist"></div></div>
   <div class="panel"><h3>下載速度測試（Curl）</h3>
     <div class="row"><select id="csize" class="btn"><option value="25">25 MB</option><option value="50">50 MB</option><option value="100">100 MB</option><option value="200">200 MB</option><option value="500">500 MB</option><option value="1000">1 GB</option></select>
       <button class="btn pri" id="cgo">測一次下載速度</button><span class="hint" id="cstat"></span></div>
@@ -224,7 +228,7 @@ function renderTrace(j){
 /* ---------- 定時測試 / 下載速度 ---------- */
 const dur=s=>s>=3600?`${Math.floor(s/3600)} 小時 ${Math.round(s%3600/60)} 分`:s>=60?`${Math.floor(s/60)} 分 ${s%60} 秒`:`${s} 秒`;
 async function startTest(m){
-  const r=await fetch("/api/test/start",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({minutes:m||null})});
+  const r=await fetch("/api/test/start",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({minutes:m||null,label:$("#tlabel").value.trim()})});
   if(!r.ok)alert((await r.json()).detail);pollTest();}
 let selMin=5;   // 目前選的時長（分鐘）；0 = 持續監測。按「開始測試」才會真的開始
 function showSel(){document.querySelectorAll("#tstart [data-m]").forEach(b=>b.classList.toggle("on",+b.dataset.m===selMin&&!$("#tcustom").value));
@@ -259,6 +263,21 @@ async function loadCurl(){try{const d=await J("/api/curl");
   $("#clist").innerHTML=d.results.length?`<table><tr><th>時間</th><th>大小</th><th>速度</th><th>連線</th><th>首位元組</th><th>總時間</th><th>備註</th></tr>`+d.results.map(c=>
     `<tr><td>${tm(c.ts)}</td><td>${c.ok?(c.bytes/1e6).toFixed(0)+" MB"+(c.partial?`（原定 ${c.mb||""} MB）`:""):"—"}</td><td>${c.ok?c.mbps+" Mbps":"失敗"}</td><td>${c.connect_ms??"—"} ms</td><td>${c.ttfb_ms??"—"} ms</td><td>${c.seconds??"—"} s</td><td>${c.partial?"時間到，只算已下載的部分 ":""}${esc(c.error||"")}${c.vpn?" 🔒VPN":""}</td></tr>`).join("")+`</table>`:"";}catch(e){}}
 setInterval(pollTest,2000);pollTest();loadCurl();
+async function loadJit(){try{const j=await J("/api/jitter?range=5m");
+  if(!j.ok){$("#jit").textContent=j.reason||"資料不足";return;}
+  $("#jit").innerHTML=`<div>每分鐘尖峰 <b>${j.per_min}</b> 次｜基準 ${fmt(j.baseline_ms)} ms｜${j.period_s?`約每 <b>${j.period_s} 秒</b>一次（規律度 ${Math.round(j.regularity*100)}%）`:"沒有明顯週期"}｜${j.subject_is_router?"分析對象：路由器":"分析對象：第一個外部目標"}</div><ul>`+j.findings.map(f=>`<li>${esc(f)}</li>`).join("")+`</ul>`;
+}catch(e){}}
+setInterval(loadJit,10000);loadJit();
+async function loadReports(){try{const L=await J("/api/reports");
+  if(!L.length){$("#rlist").innerHTML='<div class="hint">還沒有報告。跑一次定時測試後會出現在這裡。</div>';return;}
+  const c=x=>x==null?"—":x;
+  $("#rlist").innerHTML=`<div style="overflow-x:auto"><table><tr><th>標籤</th><th>時間</th><th>路由器 平均</th><th>路由器 p95</th><th>路由器 抖動</th><th>外部 平均</th><th>外部 p95</th><th>外部 抖動</th><th>尖峰/分</th><th>週期</th><th></th></tr>`+L.map(r=>{const R=r.router||{};
+    return `<tr><td>${esc(r.label)}</td><td>${tm(r.started)}</td><td>${fmt(R.avg)}</td><td>${fmt(R.p95)}</td><td>${fmt(R.jitter)}</td><td>${fmt(r.external.avg)}</td><td>${fmt(r.external.p95)}</td><td>${fmt(r.external.jitter)}</td><td>${c(r.spikes.per_min)}</td><td>${r.spikes.period_s?r.spikes.period_s+" s":"—"}</td>
+    <td style="white-space:nowrap"><button class="btn" data-rn="${r.id}">改名</button> <button class="btn" data-rd="${r.id}">刪除</button></td></tr>`}).join("")+`</table></div>`;
+  $("#rlist").querySelectorAll("[data-rn]").forEach(b=>b.onclick=async()=>{const v=prompt("新的標籤");if(!v)return;const x=await fetch("/api/reports/"+b.dataset.rn,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({label:v})});if(!x.ok)alert((await x.json()).detail);loadReports();});
+  $("#rlist").querySelectorAll("[data-rd]").forEach(b=>b.onclick=async()=>{if(!confirm("刪除這份報告？"))return;await fetch("/api/reports/"+b.dataset.rd,{method:"DELETE"});loadReports();});
+}catch(e){}}
+setInterval(loadReports,15000);loadReports();
 
 
 /* ---------- 設定 ---------- */
