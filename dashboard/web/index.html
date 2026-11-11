@@ -144,6 +144,32 @@ function plot(svg,series,events){
     o+=`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="1.6"/>`;
     s.pts.forEach(p=>{if(p.loss>0)o+=`<circle cx="${X(p.t)}" cy="${H-B-3}" r="2.5" fill="#dc2626"><title>${tm(p.t)} 丟包 ${p.loss}%</title></circle>`;});});
   svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.innerHTML=o;
+  svg._h={series,t0,t1,W,H,L,R,T,B,X,Y};hoverInit(svg);
+}
+/* 滑鼠移到圖上：顯示十字線與該時間點各目標的數值 */
+let tip=null;
+function hoverInit(svg){
+  if(svg._hov)return;svg._hov=true;
+  if(!tip){tip=document.createElement("div");tip.style.cssText="position:fixed;z-index:50;pointer-events:none;background:#fff;border:1px solid #cbd5e1;border-radius:6px;padding:6px 9px;font-size:12px;box-shadow:0 2px 8px #0003;display:none;max-width:260px";document.body.appendChild(tip);}
+  const hide=()=>{tip.style.display="none";const c=svg.querySelector("#xh");if(c)c.remove();};
+  svg.addEventListener("mouseleave",hide);
+  svg.addEventListener("mousemove",e=>{
+    const d=svg._h;if(!d)return;const r=svg.getBoundingClientRect(),sx=(e.clientX-r.left)/r.width*d.W;
+    if(sx<d.L||sx>d.W-d.R){hide();return;}
+    const t=d.t0+(sx-d.L)/(d.W-d.L-d.R)*(d.t1-d.t0);
+    const rows=[];let tt=null;
+    d.series.forEach(s=>{if(!s.pts.length)return;let best=null;s.pts.forEach(p=>{if(p.v!=null&&(best===null||Math.abs(p.t-t)<Math.abs(best.t-t)))best=p;});
+      const step=(d.t1-d.t0)/Math.max(1,s.pts.length);if(best&&Math.abs(best.t-t)<=Math.max(2.5*step,1)){rows.push({n:s.name||"",c:s.color,v:best.v,l:best.loss});if(tt===null||Math.abs(best.t-t)<Math.abs(tt-t))tt=best.t;}});
+    if(!rows.length){hide();return;}
+    rows.sort((a,b)=>b.v-a.v);
+    let c=svg.querySelector("#xh");if(!c){c=document.createElementNS("http://www.w3.org/2000/svg","line");c.id="xh";c.setAttribute("stroke","#64748b");c.setAttribute("stroke-dasharray","3 3");c.setAttribute("y1",d.T);c.setAttribute("y2",d.H-d.B);svg.appendChild(c);}
+    c.setAttribute("x1",d.X(tt));c.setAttribute("x2",d.X(tt));
+    const full=new Date(tt*1000).toLocaleTimeString("zh-TW",{hour12:false});
+    tip.innerHTML=`<b>${(d.t1-d.t0>86400?new Date(tt*1000).toLocaleDateString("zh-TW")+" ":"")+full}</b>`+rows.map(x=>`<div><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${x.c};margin-right:5px"></i>${esc(x.n)}：<b>${fmt(x.v)}</b> ms${x.l>0?` <span style="color:#dc2626">丟包 ${x.l}%</span>`:""}</div>`).join("");
+    tip.style.display="block";
+    const w=tip.offsetWidth,hh=tip.offsetHeight;let lx=e.clientX+14,ly=e.clientY+14;
+    if(lx+w>innerWidth-8)lx=e.clientX-w-14;if(ly+hh>innerHeight-8)ly=innerHeight-hh-8;
+    tip.style.left=lx+"px";tip.style.top=ly+"px";});
 }
 async function seriesFor(name,r){
   const d=await J(`/api/series?target=${encodeURIComponent(name)}&range=${r}`);
@@ -153,7 +179,7 @@ async function drawLive(){
   const [ev,all]=await Promise.all([J("/api/events"),J(`/api/series_all?range=${range}`)]);
   const conv=pts=>pts.map(p=>p.minute!==undefined?{t:p.minute,v:p.avg,loss:p.count?+(p.lost/p.count*100).toFixed(1):0}:{t:p.ts,v:p.avg,loss:p.loss_pct});
   const names=targets.map(t=>t.name).filter(n=>shown[n]!==false&&!deadNames.has(n));
-  plot($("#chart"),names.map(n=>({pts:conv(all.series[n]||[]),color:COL[targets.findIndex(t=>t.name===n)%COL.length]})),ev);
+  plot($("#chart"),names.map(n=>({name:n,pts:conv(all.series[n]||[]),color:COL[targets.findIndex(t=>t.name===n)%COL.length]})),ev);
   $("#legend").innerHTML=targets.map((t,i)=>`<label style="cursor:pointer"><input type="checkbox" data-n="${esc(t.name)}" ${shown[t.name]!==false?"checked":""}> <i style="background:${COL[i%COL.length]}"></i>${esc(t.name)}${deadNames.has(t.name)?" <small>(無回應，已不繪圖)</small>":""}</label>`).join("")+`<span><i style="background:#dc2626;border-radius:50%"></i>有丟包</span>`;
   $("#legend").querySelectorAll("input").forEach(c=>c.onchange=()=>{shown[c.dataset.n]=c.checked;drawLive();});
 }
@@ -163,7 +189,7 @@ async function drawHist(){
   $("#hsel").querySelectorAll("button").forEach(b=>b.onclick=()=>{htarget=b.dataset.n;drawHist();});
   if(!htarget)return;
   const [s,ev]=await Promise.all([seriesFor(htarget,hrange),J("/api/events")]);
-  plot($("#hchart"),[{pts:s,color:COL[0]}],ev);
+  plot($("#hchart"),[{name:htarget,pts:s,color:COL[0]}],ev);
   $("#hnote").textContent=hrange==="7d"||hrange==="24h"?"此範圍使用「每分鐘平均」，所以短暫尖峰會被平均掉；要看尖峰請用 1 小時以內。":"";
   $("#csv").href=`/api/export.csv?target=${encodeURIComponent(htarget)}&range=${hrange==="7d"?"24h":hrange}`;
 }
