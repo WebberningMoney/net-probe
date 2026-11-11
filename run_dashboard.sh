@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# run_dashboard.sh —— 一鍵啟動本機網頁儀表板。
+# run_dashboard.sh —— 用終端機啟動 NetSonar 儀表板（進階用法）。
+# 一般使用者請改用 Finder 雙擊「安裝.command」，裝好後不需要終端機。
 # 做的事：① 確認 Python ≥ 3.10 ② 第一次自動建立 .venv 並安裝套件 ③ 啟動伺服器 ④ 開瀏覽器
 # 🔰 venv（虛擬環境）= 這個專案專用的「套件小倉庫」，和你電腦其他 Python 完全隔離。
 set -eu
@@ -26,6 +27,12 @@ fi
 
 PORT=$(.venv/bin/python -c 'import json;print(json.load(open("config.json"))["port"])')
 URL="http://127.0.0.1:$PORT"
+# 已經有 NetSonar 在執行（例如用「安裝.command」裝的背景服務）→ 直接打開網頁，不重複啟動
+if curl -fs --max-time 2 "$URL/api/health" >/dev/null 2>&1; then
+  echo "✅ NetSonar 已經在執行（可能是背景服務），直接打開：$URL"
+  open "$URL" 2>/dev/null || true
+  exit 0
+fi
 echo "🚀 儀表板啟動中：$URL （按 Ctrl+C 結束）"
 # 稍等伺服器就緒再開瀏覽器（macOS 的 open）
 ( sleep 2; command -v open >/dev/null 2>&1 && open "$URL" ) &

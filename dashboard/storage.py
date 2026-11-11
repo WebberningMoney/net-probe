@@ -1,17 +1,17 @@
-"""storage.py —— SQLite 讀寫、每分鐘彙總、過期清理。
+"""storage.py —— 把量測結果存進資料庫（SQLite，就是電腦裡的一個資料檔），以及讀出來。
 
-保留策略（已與作者確認）：
-  • samples    原始每秒樣本，保留 24 小時
-  • minute_agg 每分鐘彙總，保留 90 天
-💡 為什麼要彙總？一天有 86,400 秒 × 目標數筆原始資料；查 7 天趨勢時，
-   直接讀「每分鐘一筆」的彙總快很多，也省空間。
+存了哪些東西、存多久：
+  • samples     每秒的原始量測結果，保留 24 小時
+  • minute_agg  每分鐘的平均（平均、慢的時候、丟包），保留 90 天
+  • reports     定時測試報告，一直保留到你在網頁上刪除
+💡 為什麼要每分鐘平均一次？一天有 86,400 秒；看 7 天趨勢時，
+   讀「每分鐘一筆」比讀「每秒一筆」快很多，也省空間。
 """
 from __future__ import annotations
 
 import json
 import sqlite3
 import threading
-from typing import Optional
 
 import stats
 

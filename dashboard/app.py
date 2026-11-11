@@ -1,10 +1,14 @@
-"""app.py —— 儀表板後端入口（FastAPI）。
+"""app.py —— 儀表板的「大腦」：負責量測、整理資料、提供網頁需要的資料。
 
-做三件事：
-  1. 背景迴圈：每秒同時 ping 所有目標 → 存進 SQLite → 推送給網頁
-  2. REST API：查詢統計摘要、歷史彙總
-  3. SSE（Server-Sent Events）：把每秒的最新結果「推」給瀏覽器
-只綁 127.0.0.1（本機），不對外開放。
+白話流程：
+  1. 量測：每個目標有自己的小迴圈，每隔幾秒 ping 一次（各目標錯開時間，不會一起擠在同一瞬間）。
+  2. 整理：每秒把結果寫進資料庫，同時檢查要不要發警示、更新網頁。
+  3. 提供資料：網頁透過 /api/... 這些網址來拿數字（例如 /api/summary 是各目標的統計）。
+  4. 即時推送：/api/stream 讓網頁每秒自動收到最新結果，不用一直重新整理。
+
+只開放給這台電腦（127.0.0.1），同一個 Wi-Fi 的其他裝置連不到。
+其他檔案的分工：probe.py 去 ping、stats.py 算統計、storage.py 存資料、alerts.py 發警示、
+diagnose.py／jitter.py／advice.py 把數字翻成白話建議、netenv.py 讀網路環境。
 """
 from __future__ import annotations
 
@@ -312,7 +316,7 @@ class Engine:
                 new.add(n)                                    # 已標記的，要等到回應一次才解除
         now = int(time.time())
         for n in new - self.dead:
-            self.events.append({"ts": now, "text": f"{n} 持續不回應 ping（其他目標正常），已暫停對它的警示與判讀"})
+            self.events.append({"ts": now, "text": f"{n} 一直沒有回應（其他目標正常），已暫停對它的警示與判讀"})
         for n in self.dead - new:
             self.events.append({"ts": now, "text": f"{n} 恢復回應"})
         self.dead = new

@@ -1,7 +1,8 @@
-"""serve.py —— 啟動儀表板伺服器（run_dashboard.sh 呼叫這支）。
+"""serve.py —— 啟動儀表板的網頁伺服器。
 
-為什麼不直接用 `uvicorn app:app`？為了讓 Ctrl+C 能「立刻、乾淨」地結束：
-收到結束信號時，先通知網頁串流（SSE）收工，再讓 uvicorn 正常關閉。
+誰會執行它：run_dashboard.sh（終端機啟動）、或「安裝.command」裝好的背景服務（開機自動啟動）。
+為什麼不直接用 `uvicorn app:app` 指令？為了按 Ctrl+C 時能「立刻、乾淨」地結束：
+先通知網頁的即時連線收工，再關閉伺服器。
 """
 import json
 from pathlib import Path

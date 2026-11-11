@@ -70,16 +70,16 @@ def analyze_hops(hops: list, vpn_active: bool = False) -> dict:
             spikes.append(h["hop"])
     if rise_at is not None:
         status[rise_at] = "high"
-        title = f"延遲從第 {rise_at} 跳開始升高，之後都維持高檔"
-        detail = (f"第 {rise_at} 跳之後每一跳都偏高，問題多半在第 {rise_at - 1}～{rise_at} 跳之間的線路"
-                  "（若是第 1～2 跳，通常是你的 Wi-Fi／路由器／ISP 接入段）。建議在不同時段多測幾次再判斷。")
+        title = f"延遲從第 {rise_at} 站開始升高，之後都維持高檔"
+        detail = (f"第 {rise_at} 站之後每一站都偏高，問題多半在第 {rise_at - 1}～{rise_at} 站之間的線路"
+                  "（如果是第 1～2 站，通常是你的 Wi-Fi、路由器或網路公司接到你家的線路）。建議在不同時段多測幾次再判斷。")
     elif spikes:
         for s in spikes:
             status[s] = "high"
-        title = "第 " + "、".join(map(str, spikes)) + " 跳偏高，但後面的節點都正常"
-        detail = "通常是該節點「不優先回應追蹤封包」，不代表真的塞車。真正要在意的是：延遲從某一跳開始升高、之後每一跳都一樣高。"
+        title = "第 " + "、".join(map(str, spikes)) + " 站偏高，但後面都正常"
+        detail = "通常是那一站「不急著回應這種測試」，不代表真的塞車。真正要在意的是：延遲從某一站開始升高，之後每一站都一樣高。"
     if vpn_active:
-        detail += "　⚠️ VPN 開啟中：第 1 跳通常是 VPN 通道，後面是 VPN 伺服器出口之後的路徑，看不到你的 ISP；要檢查 ISP 請先關閉 VPN。"
+        detail += "　⚠️ VPN 開啟中：第 1 站通常是 VPN 通道，後面是 VPN 伺服器之後的路線，看不到你家網路公司那一段；要檢查網路公司請先關閉 VPN。"
     return {"status": status, "title": title, "detail": detail}
 
 

@@ -1,8 +1,9 @@
-"""settings.py —— 「設定」頁的後端：驗證、儲存、合併。
+"""settings.py —— 「設定」頁的後端：檢查你輸入的值、存起來、跟預設值合併。
 
-💡 設計：使用者在網頁改的設定存在 `dashboard/settings.json`（不進 git），
-   啟動時蓋在 `config.json`（預設值，進 git）之上。這樣 `git pull` 更新程式不會跟你的設定衝突，
-   按「恢復預設」只要刪掉 settings.json 即可。
+💡 設計：程式附帶的預設值在 config.json；你在網頁上改的部分另外存在 settings.json，
+   啟動時「蓋」在預設值上面。好處：更新程式不會蓋掉你的設定；按「恢復預設」只要刪掉 settings.json。
+   settings.json 放在哪：用終端機啟動時在 dashboard/ 資料夾；用「安裝.command」安裝時在
+   ~/Library/Application Support/NetSonar/data/。
 """
 from __future__ import annotations
 

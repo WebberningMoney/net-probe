@@ -1,7 +1,6 @@
 import asyncio
 import netenv
 import traceroute as tr
-import gateway
 
 HW = """Hardware Port: Wi-Fi
 Device: en0
@@ -106,9 +105,9 @@ def test_traceroute_parse_and_validate():
 def test_analyze():
     mk = lambda i, a: {"hop": i, "rtts": [a] if a else [], "avg": a}
     rising = tr.analyze_hops([mk(1, 2), mk(2, 10), mk(3, 90), mk(4, 95), mk(5, 100)])
-    assert rising["status"][3] == "high" and "第 3 跳" in rising["title"]
+    assert rising["status"][3] == "high" and "第 3 站" in rising["title"]
     spike = tr.analyze_hops([mk(1, 2), mk(2, 80), mk(3, 10), mk(4, 12)])
-    assert spike["status"][2] == "high" and "不優先" in spike["detail"]
+    assert spike["status"][2] == "high" and "不急著回應" in spike["detail"]
     assert "VPN" in tr.analyze_hops([mk(1, 2)], vpn_active=True)["detail"]
 
 
@@ -317,7 +316,7 @@ def test_unreachable_target_is_marked_and_excluded(tmp_path):
         assert eng.dead == {"DEADY"}
         s = eng.summary("5m")
         assert s["DEADY"]["unreachable"] and not s["OK"]["unreachable"]
-        assert any("持續不回應" in e["text"] for e in eng.events)
+        assert any("一直沒有回應" in e["text"] for e in eng.events)
         assert "DEADY" not in " ".join(a["message"] for a in eng.alerts.history)   # 不對它發警示
         state["dead_ok"] = True
         await eng.tick()
@@ -422,7 +421,6 @@ def test_per_target_alert_threshold_and_mute():
     am = AlertManager({"macos_notification": False}, None, lambda *a: None, {"A": {"p95_ms": 300}, "B": {"mute": True}})
     slow = [10.0] * 30 + [200.0] * 30
     fired = am.evaluate({"A": slow, "B": slow, "C": slow}, 1000)
-    names = {x["target"] for x in fired} if fired and "target" in fired[0] else None
     text = " ".join(str(x) for x in fired)
     assert "C" in text and "B 近" not in text and "A 近" not in text
 

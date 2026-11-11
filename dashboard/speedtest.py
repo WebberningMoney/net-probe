@@ -1,8 +1,10 @@
-"""speedtest.py —— 下載速度測試（用系統 curl 從 Cloudflare 下載固定大小的檔案）。
+"""speedtest.py —— 下載速度測試（用 Mac 內建的 curl 從 Cloudflare 下載一個測試檔）。
 
-💡 為什麼不另外裝測速套件？curl 是 macOS 內建的，不用多裝東西；
-   Cloudflare 的 `__down?bytes=N` 會回傳 N 個位元組的測試資料，N 必須小於 1 億（100,000,000）。
-⚠️ 下載時會把頻寬吃滿，同一時間的延遲數字會變差（這叫 bufferbloat，本身也是有用的資訊）。
+💡 為什麼不另外裝測速軟體？curl 是 macOS 內建的；Cloudflare 的網址 `__down?bytes=N`
+   會直接給你 N 個位元組的測試資料，很適合拿來量速度。
+   先試著一次下載整個大小；如果 Cloudflare 拒絕（作者 2026 年實測：1 億位元組以上會被拒），
+   才自動拆成幾段分別下載，再合併計算。
+⚠️ 下載時會把網路塞滿，同一段時間的延遲會變差（這叫 bufferbloat，本身也是有用的資訊）。
 """
 from __future__ import annotations
 

@@ -33,21 +33,21 @@ def _wifi(env: dict, wifi: dict | None) -> dict | None:
     lv = "ok"
     if sig is not None:
         if sig < -72:
-            lv, _ = "bad", tips.append("訊號很弱：靠近路由器、減少中間的牆，或加一台延伸器／Mesh 節點。")
+            lv, _ = "bad", tips.append("訊號很弱：靠近路由器、減少中間的牆，或加一台 Wi-Fi 延伸器（Mesh）。")
         elif sig < -67:
             lv, _ = "warn", tips.append("訊號偏弱：視訊或遊戲可能不穩，建議靠近路由器一點。")
     if snr is not None:
         if snr < 15:
-            lv, _ = _worst(lv, "bad"), tips.append("訊號雜訊比很差：周圍干擾多，試著換 Wi-Fi 頻道，或改用 5 GHz。")
+            lv, _ = _worst(lv, "bad"), tips.append("訊噪比很差：周圍干擾多，試著換 Wi-Fi 頻道，或改用 5 GHz。")
         elif snr < 25:
-            lv, _ = _worst(lv, "warn"), tips.append("訊號雜訊比偏低：周圍可能有干擾（鄰居的 Wi-Fi、微波爐等）。")
+            lv, _ = _worst(lv, "warn"), tips.append("訊噪比偏低：周圍可能有干擾（鄰居的 Wi-Fi、微波爐等）。")
     if wifi.get("band") == "2.4 GHz":
         tips.append("目前連在 2.4 GHz：穿牆好但很擁擠；若路由器有 5 GHz，優先連 5 GHz。")
     if wifi.get("tx_rate_mbps") and wifi["tx_rate_mbps"] < 100:
         tips.append("連線速率偏低（低於 100 Mbps），大檔案下載可能受限。")
     parts = []
     if sig is not None:
-        parts.append(f"訊號 {sig} dBm（{wifi.get('signal_label', '')}）")
+        parts.append(f"訊號強度 {sig} dBm（{wifi.get('signal_label', '')}）")
     if snr is not None:
         parts.append(f"訊噪比 {snr} dB（{snr_label(snr)}）")
     if wifi.get("band"):
@@ -61,12 +61,12 @@ def _router(s: dict | None, name: str | None) -> dict | None:
     lv, tips = "ok", []
     if s["loss_pct"] >= 1 or (s["p95"] or 0) >= 30:
         lv = "bad"
-        tips.append("你的裝置到路由器這一小段就不穩，問題在你這一端（Wi-Fi 或路由器），不是網路業者。")
+        tips.append("你的裝置到路由器這一小段就不穩，問題在你家裡（Wi-Fi、路由器或這台電腦），不是網路公司。")
     elif (s["jitter"] or 0) >= 5 or (s["p95"] or 0) >= 15:
         lv = "warn"
         tips.append("到路由器的延遲偶爾跳動，可能有無線干擾或本機背景程式；詳見「抖動」。")
     return {"key": "router", "title": "家裡這一段（到路由器）", "level": lv,
-            "summary": f"平均 {s['avg']} ms，慢的時候 {s['p95']} ms，丟包 {s['loss_pct']}%。", "tips": tips}
+            "summary": f"平均 {round(s['avg'], 1)} ms，慢的時候 {round(s['p95'], 1)} ms，丟包 {round(s['loss_pct'], 2)}%。", "tips": tips}
 
 
 def _external(summaries: dict, router: str | None, dead: set) -> dict | None:
@@ -79,7 +79,7 @@ def _external(summaries: dict, router: str | None, dead: set) -> dict | None:
     lv, tips = "ok", []
     if loss >= 5 or jit >= 25:
         lv = "bad"
-        tips.append("外部目標普遍不穩。若「家裡這一段」正常，問題在路由器之後：可記錄發生時段，向網路業者反映。")
+        tips.append("外部目標普遍不穩。若「家裡這一段」正常，問題在家以外：可以記下發生的時段，向網路公司反映。")
     elif loss >= 2 or jit >= 10:
         lv = "warn"
         tips.append("外部連線有些不穩，持續觀察是否固定在某些時段發生。")
@@ -87,7 +87,7 @@ def _external(summaries: dict, router: str | None, dead: set) -> dict | None:
         tips.append("、".join(far) + " 的延遲較高是因為伺服器離台灣比較遠（物理距離），不是網路壞掉，可放心忽略。")
     near_avg = median(v["avg"] for v in ext.values())
     return {"key": "external", "title": "連到外面的網路", "level": lv,
-            "summary": f"{len(ext)} 個外部目標，典型延遲約 {round(near_avg)} ms，抖動約 {round(jit, 1)} ms，最高丟包 {loss}%。", "tips": tips}
+            "summary": f"{len(ext)} 個外部目標，典型延遲約 {round(near_avg)} ms，抖動約 {round(jit, 1)} ms，最高丟包 {round(loss, 2)}%。", "tips": tips}
 
 
 def _jitter(j: dict | None) -> dict:

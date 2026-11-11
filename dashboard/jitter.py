@@ -104,29 +104,29 @@ def analyze(subject: dict, others: dict, subject_is_router: bool) -> dict:
 def findings(r: dict) -> list:
     """把數字翻成白話。原因一律用「可能」，並附上可做的對照實驗。"""
     f = []
-    who = "路由器（區網）" if r["subject_is_router"] else "第一個目標"
+    who = "路由器（家裡這一段）" if r["subject_is_router"] else "第一個目標"
     if r["per_min"] < 1 and not r["period_s"]:
-        return [f"{who}幾乎沒有延遲尖峰（每分鐘不到 1 次），區網這一段是穩的。"]
+        return [f"{who}幾乎沒有延遲尖峰（每分鐘不到 1 次），家裡這一段是穩的。"]
     f.append(f"{who}平常約 {r['baseline_ms']} ms，超過 {r['threshold_ms']} ms 就算尖峰；"
              f"每分鐘約 {r['per_min']} 次，約 {r['hot_share']}% 的時間處於尖峰。")
     if r["subject_is_router"]:
         if r["baseline_ms"] > 15 or r["per_min"] >= 3:
-            f.append("區網（你的裝置到路由器）本身就在跳動——這是「你這一端」的問題，不是 ISP。")
+            f.append("連你的裝置到路由器（家裡這一段）都在跳動——問題在你家裡，不是網路公司。")
         if r["sync_with_external"] >= 0.6:
             f.append(f"外部目標的尖峰有約 {int(r['sync_with_external'] * 100)}% 與路由器同時發生，"
-                     "代表外部的跳動多半是從區網這一段帶出去的。")
+                     "代表外面的跳動多半是從家裡這一段帶出去的。")
     p = r["period_s"]
     if p and r["regularity"] and r["regularity"] >= 0.25:
-        f.append(f"尖峰有規律：約每 {p} 秒一次（規律程度 {r['regularity']}）。")
+        f.append(f"尖峰有規律：約每 {p} 秒一次（規律程度 {round(r['regularity'] * 100)}%）。")
         if p >= 45:
-            f.append("每分鐘左右一次，可能是 Wi-Fi 背景掃描或排程工作（例如工具／系統定時掃描網路、雲端同步）。"
-                     "對照：關掉 Wi-Fi 詳細資訊的自動更新、暫停雲端同步／備份，看週期是否消失。")
+            f.append("大約每分鐘一次，可能是 Wi-Fi 背景掃描或定時工作（例如系統定時掃描網路、雲端同步）。"
+                     "可以試試：到「設定」把 Wi-Fi 詳細資訊改成不自動更新、暫停雲端同步或備份，再看看規律是否消失。")
         elif p >= 2:
-            f.append("幾秒一次的規律尖峰，常見於 Wi-Fi 層的週期行為：macOS 的 AirDrop／接力（AWDL）頻道切換、"
-                     "藍牙與 2.4 GHz 共存、或路由器的省電／排程機制。對照：先關 AirDrop 與接力、"
-                     "改接網路線，看尖峰是否消失。")
+            f.append("幾秒一次的規律尖峰，常見原因：藍牙在背景掃描（很多 Mac 的 Wi-Fi 和藍牙共用同一顆晶片，連 5 GHz 也可能受影響）、"
+                     "AirDrop／接力定時切換頻道，或路由器的省電機制。可以試試：先只關藍牙測一次，再只關 AirDrop 與接力測一次，"
+                     "看哪一個讓尖峰消失。")
     else:
-        f.append("尖峰沒有固定週期、一陣一陣隨機出現——較像無線電波被搶（鄰居 Wi-Fi 干擾、同頻道擁擠、"
-                 "訊號偏弱時速率反覆調整）或路由器忙碌。對照：換頻道／改 40 MHz 寬度、靠近路由器、"
-                 "改接網路線；若有線也跳，才懷疑路由器本身。")
+        f.append("尖峰沒有固定規律、一陣一陣隨機出現——比較像無線電波被搶（鄰居的 Wi-Fi 干擾、同頻道太擠、"
+                 "訊號偏弱）或路由器太忙。可以試試：換 Wi-Fi 頻道、把頻寬改成 40 MHz、靠近路由器；"
+                 "能接網路線的話也測一次，有線也跳才懷疑路由器本身。")
     return f

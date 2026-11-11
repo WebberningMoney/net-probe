@@ -77,45 +77,45 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
     <div id="tprog" class="hint"></div><div class="row"><button class="btn" id="tstop" style="display:none">結束並產生報告</button></div>
     <div id="treport"></div></div>
   <div class="panel"><h3>已保存的測試報告（並排比較）</h3>
-    <div class="hint">每次定時測試結束都會自動保存，並記下當時的連線方式、頻段、訊號。換一個條件（有線 vs Wi-Fi、2.4 vs 5 GHz、換頻道、關 AirDrop）各測一次，就能在這裡比較「哪個條件抖動最少」。</div>
+    <div class="hint">每次定時測試結束都會自動保存，並記下當時的連線方式、頻段、訊號。換一個條件（有線 vs Wi-Fi、2.4 vs 5 GHz、換頻道、關 AirDrop）各測一次，就能在這裡比較「哪個條件抖動最少」。一次只改一個條件，比較才有意義。</div>
     <div id="rlist"></div></div>
-  <div class="panel"><h3>下載速度測試（Curl）</h3>
+  <div class="panel"><h3>下載速度測試</h3>
     <div class="row"><select id="csize" class="btn"><option value="25">25 MB</option><option value="50">50 MB</option><option value="100">100 MB</option><option value="200">200 MB</option><option value="500">500 MB</option><option value="1000">1 GB</option></select>
       <button class="btn pri" id="cgo">測一次下載速度</button><span class="hint" id="cstat"></span></div>
     <div class="hint" id="cwarn"></div>
     <div id="clist"></div>
-    <div class="hint">從 Cloudflare 下載你選的大小（大於 1 億位元組時先試單次下載，若 Cloudflare 拒絕才自動拆成多次再合併計算；最久 3 分鐘，超過就用已下載的部分計算）。下載時會吃滿頻寬，同時間的延遲會變差（這也能看出網路塞車時的反應）。開著 VPN 時測到的是「經過 VPN 的速度」。</div></div>
+    <div class="hint">從 Cloudflare 下載一個你選的大小的測試檔，算出平均速度。最多花 3 分鐘，時間到就用已下載的部分計算。<br>下載期間網路會被塞滿，同一段時間的延遲會變差，這是正常的（剛好可以看出網路塞車時的反應）。開著 VPN 時，測到的是「經過 VPN 的速度」。</div></div>
 </section>
 <section id="set">
   <div class="panel"><h3>監測目標</h3>
-    <div class="hint">要 ping 誰。按住最左邊的「⠿」上下拖曳即可調整順序（也可用 ↑↓ 按鈕），儀表板的卡片、圖例、報告都照這個順序。新增或修改後按下方「儲存設定」立即生效，不必重新啟動。最多 8 個。</div>
+    <div class="hint">要定期量哪些地方（填網址或 IP）。按住最左邊的「⠿」上下拖曳可以調整順序（也可以用 ↑↓ 按鈕），即時頁的卡片和圖例都照這個順序。改完按最下方「儲存設定」就會生效。最多 8 個。<br>「慢的時候 警示門檻」留空＝用下方「警示」的設定；距離比較遠的目標可以填大一點。勾選「靜音」＝不對它發延遲或丟包警示（完全沒回應時仍會通知）。</div>
     <table id="stargets"></table><div class="row"><button class="btn" id="sadd">＋ 新增目標</button></div></div>
   <div class="panel"><h3>測量</h3><div class="form">
-    <label>測量間隔（秒）<input type="number" id="s_interval" step="0.5" min="0.5" max="10"></label>
-    <label>逾時（秒）<input type="number" id="s_timeout" min="1" max="5"></label>
-    <label><input type="checkbox" id="s_gw"> 同時測路由器　名稱 <input type="text" id="s_gwname" style="width:120px"></label>
+    <label>每隔幾秒量一次 <input type="number" id="s_interval" step="0.5" min="0.5" max="10"></label>
+    <label>等幾秒沒回應就算逾時 <input type="number" id="s_timeout" min="1" max="5"></label>
+    <label><input type="checkbox" id="s_gw"> 同時量家裡的路由器<span class="i" tabindex="0" data-g="gateway">ⓘ</span>（建議開啟，找問題的關鍵）　顯示名稱 <input type="text" id="s_gwname" style="width:120px"></label>
     <label>Wi-Fi 詳細資訊更新間隔 <select id="s_wifi" class="btn"><option value="0">不自動更新（手動）</option><option value="60">每 1 分鐘</option><option value="300">每 5 分鐘（預設）</option><option value="900">每 15 分鐘</option></select></label>
-    <div class="hint" style="margin:-4px 0 4px 0">更新時 macOS 會掃描周圍 Wi-Fi，全部目標可能同時出現一次短暫延遲尖峰；若你的圖上有規律的尖峰，請先調長或關閉這項。</div>
-    <label><input type="checkbox" id="s_pub"> 查詢對外 IP／ISP（會向 ipinfo.io 發出一次請求）</label></div></div>
+    <div class="hint" style="margin:-4px 0 4px 0">讀取時 macOS 會掃描周圍的 Wi-Fi，所有目標可能同時跳一下。如果圖上有固定間隔的跳動，可以先把這裡調長或關閉，看看是不是它造成的。</div>
+    <label><input type="checkbox" id="s_pub"> 查詢對外 IP、網路公司與 DNS 服務商名稱（會連到 ipinfo.io 與 rdap.org，只在網路環境改變時查）</label></div></div>
   <div class="panel"><h3>警示</h3><div class="form">
     <label><input type="checkbox" id="s_aon"> 啟用警示</label>
     <label><input type="checkbox" id="s_anotif"> 同時跳出 macOS 通知</label>
-    <label>連續逾時達 <input type="number" id="s_ato" min="2" max="120"> 次</label>
-    <label>近 1 分鐘丟包率達 <input type="number" id="s_aloss" min="1" max="100"> %</label>
-    <label>近 1 分鐘「慢的時候」<span class="i" tabindex="0" data-g="p95">ⓘ</span> 延遲達 <input type="number" id="s_ap95" min="10" max="5000"> ms</label>
-    <label>同一類警示，<input type="number" id="s_acd" min="10" max="3600"> 秒內只通知一次</label></div></div>
+    <label>連續幾次沒回應就通知 <input type="number" id="s_ato" min="2" max="120"> 次</label>
+    <label>最近 1 分鐘丟包<span class="i" tabindex="0" data-g="loss">ⓘ</span>達 <input type="number" id="s_aloss" min="1" max="100"> % 就通知</label>
+    <label>最近 1 分鐘「慢的時候」<span class="i" tabindex="0" data-g="p95">ⓘ</span> 延遲達 <input type="number" id="s_ap95" min="10" max="5000"> ms 就通知</label>
+    <label>同一類問題 <input type="number" id="s_acd" min="10" max="3600"> 秒內只通知一次（避免一直吵）</label></div></div>
   <details class="panel"><summary style="cursor:pointer;font-weight:600">進階：下載測試網址</summary>
-    <div class="hint">留空使用預設（Cloudflare）。網址必須是 https，並用 <code>{bytes}</code> 代表要下載的位元組數。</div>
+    <div class="hint">一般不用改，留空就是用 Cloudflare。若要換成別的測速網址：必須以 https 開頭，並在網址中用 <code>{bytes}</code> 代表要下載的大小。</div>
     <input type="text" id="s_curl" style="width:100%;margin-top:8px"></details>
-  <div class="panel"><h3>引擎健康度 <small class="hint">（用來分辨「網路不穩」還是「本程式／電腦太忙」）</small></h3><div id="ehealth" class="hint">讀取中…</div></div>
+  <div class="panel"><h3>程式健康度 <small class="hint">（分辨「網路不穩」還是「電腦太忙、量測被拖慢」）</small></h3><div id="ehealth" class="hint">讀取中…</div></div>
   <div class="row"><button class="btn pri" id="ssave">儲存設定</button><button class="btn" id="sreset">恢復預設</button><span id="smsg" class="hint"></span></div>
-  <div class="hint">設定存在 <code>dashboard/settings.json</code>（不會被 git 更新覆蓋）。連接埠（8765）需修改 <code>config.json</code> 並重新啟動。</div>
+  <div class="hint">設定會保存在這台電腦，更新程式時不會被覆蓋。按「恢復預設」可回到原廠設定。</div>
 </section>
 <section id="trace">
   <div class="panel"><h3>路徑分析（Traceroute）</h3>
     <div class="row"><input type="text" id="thost" value="1.1.1.1" aria-label="目標"><button class="btn pri" id="tgo">開始分析</button><span class="hint" id="tstat"></span></div>
     <div id="tres"></div>
-    <div class="hint">一站一站看延遲。「—」代表該節點不回應（很常見，不代表有問題）；要注意的是延遲從某一跳開始升高、之後都維持高檔。</div></div>
+    <div class="hint">列出資料從你家到目標，一路經過的每一站和各站的延遲（約需 10～30 秒）。<br>「—」代表那一站不回應，很常見，不代表有問題。要注意的是：延遲從某一站開始變高，而且之後每一站都一直很高，問題多半就在那一站附近。只有單獨一站特別高、後面又恢復正常，通常不用擔心。</div></div>
 </section>
 </main>
 <div id="gtip"></div>
@@ -144,11 +144,11 @@ signal:"訊號強度（dBm）：數字越接近 0 越強。-50 以上極佳、-6
 noise:"雜訊：環境中的背景干擾，數字越小（越負）越好，-90 以下算很乾淨。",
 snr:"訊噪比（SNR）：訊號比雜訊強多少，越大越好。40 以上極佳、25–40 良好、15–25 偏低、15 以下很差。",
 txrate:"傳輸速率：電腦和路由器之間『理論上』的連線速度，不是實際上網速度，實際通常只有一半甚至更低。",
-publicip:"對外 IP：網站看到的你的位址，由網路業者（ISP）分配，預設遮蔽以保護隱私。",
-isp:"ISP（網路業者）：提供你上網服務的公司，例如中華電信。",
+publicip:"對外 IP：網站看到的你的位址，由網路公司（ISP）分配，預設遮蔽以保護隱私。",
+isp:"ISP（網路公司）：提供你上網服務的公司，例如中華電信。",
 spike:"尖峰：延遲突然變很高的瞬間。",
 timeout:"逾時：等了一段時間都沒有收到回應。",
-where:"把問題分成三段：你這一端（到路由器）、路由器之後（網路業者或遠端）、單一目標自己的問題。"};
+where:"把問題分成三段：你這一端（到路由器）、路由器之後（網路公司或遠端）、單一目標自己的問題。"};
 const ti=k=>GL[k]?`<span class="i" tabindex="0" data-g="${k}">ⓘ</span>`:"";
 (()=>{const t=document.getElementById("gtip");let cur=null;
   const show=el=>{const g=GL[el.dataset.g];if(!g)return;cur=el;t.textContent=g;t.style.display="block";const r=el.getBoundingClientRect();
@@ -193,7 +193,7 @@ function plot(svg,series,events){
     o+=`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="1.6"/>`;
     s.pts.forEach(p=>{if(p.loss>0)o+=`<circle cx="${X(p.t)}" cy="${H-B-3}" r="2.5" fill="#dc2626"><title>${tm(p.t)} 丟包 ${p.loss}%</title></circle>`;});});
   svg.setAttribute("viewBox",`0 0 ${W} ${H}`);svg.innerHTML=o;
-  svg._h={series,t0,t1,W,H,L,R,T,B,X,Y};hoverInit(svg);
+  svg._h={series,t0,t1,W,H,L,R,T,B,X,Y};hoverInit(svg);if(svg._in&&svg._last)svg._move(svg._last);   // 重畫後依滑鼠位置更新提示
 }
 /* 滑鼠移到圖上：顯示十字線與該時間點各目標的數值 */
 let tip=null;
@@ -201,8 +201,8 @@ function hoverInit(svg){
   if(svg._hov)return;svg._hov=true;
   if(!tip){tip=document.createElement("div");tip.style.cssText="position:fixed;z-index:50;pointer-events:none;background:#fff;border:1px solid #cbd5e1;border-radius:6px;padding:6px 9px;font-size:12px;box-shadow:0 2px 8px #0003;display:none;max-width:260px";document.body.appendChild(tip);}
   const hide=()=>{tip.style.display="none";const c=svg.querySelector("#xh");if(c)c.remove();};
-  svg.addEventListener("mouseleave",hide);
-  svg.addEventListener("mousemove",e=>{
+  svg.addEventListener("mouseleave",()=>{svg._in=false;hide();});
+  svg._move=e=>{
     const d=svg._h;if(!d)return;const r=svg.getBoundingClientRect(),sx=(e.clientX-r.left)/r.width*d.W;
     if(sx<d.L||sx>d.W-d.R){hide();return;}
     const t=d.t0+(sx-d.L)/(d.W-d.L-d.R)*(d.t1-d.t0);
@@ -218,7 +218,8 @@ function hoverInit(svg){
     tip.style.display="block";
     const w=tip.offsetWidth,hh=tip.offsetHeight;let lx=e.clientX+14,ly=e.clientY+14;
     if(lx+w>innerWidth-8)lx=e.clientX-w-14;if(ly+hh>innerHeight-8)ly=innerHeight-hh-8;
-    tip.style.left=lx+"px";tip.style.top=ly+"px";});
+    tip.style.left=lx+"px";tip.style.top=ly+"px";};
+  svg.addEventListener("mousemove",e=>{svg._in=true;svg._last={clientX:e.clientX,clientY:e.clientY};svg._move(svg._last);});
 }
 async function seriesFor(name,r){
   const d=await J(`/api/series?target=${encodeURIComponent(name)}&range=${r}`);
@@ -247,7 +248,7 @@ async function drawHist(){
 function cards(sum){
   deadNames=new Set(Object.entries(sum).filter(([n,v])=>v.unreachable).map(([n])=>n));
   $("#cards").innerHTML=targets.map(t=>{const s=sum[t.name]||{},cur=latest[t.name],to=cur===null;
-    if(s.unreachable)return `<div class="card dead"><h4><span>${esc(t.name)}</span><span>—</span></h4><div class="big">無回應</div><div class="deadnote">這個位址持續不回應 ping，但其他目標正常（開 VPN 時常見）。已暫停對它的警示與判讀；可到「設定」頁刪除。</div></div>`;
+    if(s.unreachable)return `<div class="card dead"><h4><span>${esc(t.name)}</span><span>—</span></h4><div class="big">無回應</div><div class="deadnote">這個位址一直沒有回應，但其他目標都正常（開 VPN 時常見，有些網站也會擋這種測試）。已暫停對它的警示；可以到「設定」頁刪除。</div></div>`;
     return `<div class="card ${s.grade||""}"><h4><span>${esc(t.name)}</span><span title="${mosTip}">MOS ${fmt(s.mos)}</span></h4>
     <div class="big ${to?"to":""}">${cur===undefined?"—":to?"逾時":fmt(cur)}<small> ${cur>=0&&cur!==null?"ms":""}</small></div>
     <dl><dt>平均 / 慢的時候${ti("p95")}</dt><dd>${fmt(s.avg)} / ${fmt(s.p95)}</dd><dt>抖動${ti("jitter")}</dt><dd>${fmt(s.jitter)}</dd><dt>丟包${ti("loss")}</dt><dd>${s.loss_pct??"—"}%</dd><dt>分數${ti("score")}</dt><dd>${fmt(s.score)} ${s.grade||""}</dd></dl>${s.avg>50&&(s.jitter??99)<10&&(s.loss_pct??9)<1&&t.name!==routerName?`<div class="far">距離較遠，偏慢屬正常</div>`:""}</div>`;}).join("");
@@ -260,9 +261,9 @@ async function side(){
     drawAdvice(d);
     cards(sum.targets);
     const hh=(await J("/api/health")).engine;
-    $("#busybar").innerHTML=hh.ok?"":`<div class="banner">⚠️ 本機偏忙：量測可能受影響，逾時不一定是網路問題（詳見「設定」頁底部的引擎健康度）。</div>`;
+    $("#busybar").innerHTML=hh.ok?"":`<div class="banner">⚠️ 電腦偏忙：量測可能被拖慢，這時的逾時不一定是網路問題（詳見「設定」頁底部的程式健康度）。</div>`;
     const v=e.env.vpn||{};
-    $("#vpnbar").innerHTML=v.active?`<div class="banner">🔒 VPN 開啟中（${esc(v.interface)}）：所有延遲都包含「繞到 VPN 伺服器」的距離，分數會偏低；路由器那一列才是你家到路由器的真實狀況。</div>`:"";
+    $("#vpnbar").innerHTML=v.active?`<div class="banner">🔒 VPN 開啟中（${esc(v.interface)}）：所有延遲都包含「繞到 VPN 伺服器」的距離，數字會偏高；「路由器」那張卡片才是你家網路的真實狀況。</div>`:"";
     routerName=(await J("/api/diagnosis")).router;
     const w=e.wifi, en=e.env, pub=e.public;
     const R=(k,val)=>`<tr><td class="k">${k}</td><td>${val}</td></tr>`;
@@ -272,8 +273,8 @@ async function side(){
     h+=R("DNS"+ti("dns"),(en.dns||[]).map(x=>esc(x)+(dn[x]?` <small class='m'>・${esc(dn[x].name)}</small>`:"")+(x.startsWith("100.64.")||x.startsWith("10.")&&v.active?" <small class='m'>(VPN)</small>":"")).join("<br>")||"—");
     if(w){h+=R("Wi-Fi"+ti("wifi"),`${esc(w.phy||"")} ・ ${esc(w.band||"")} 頻道 ${w.channel??"—"}（${esc(w.width||"")}）`)+
       R("訊號強度"+ti("signal"),`${w.signal_dbm} dBm（${esc(w.signal_label)}）`)+R("雜訊"+ti("noise"),`${w.noise_dbm} dBm（${noiseLb(w.noise_dbm)}）`)+R("訊噪比"+ti("snr"),`${w.snr_db} dB（${snrLb(w.snr_db)}）`)+R("傳輸速率"+ti("txrate"),`${w.tx_rate_mbps} Mbps`);}
-    h+=R("對外 IP"+ti("publicip"),pub&&pub.ip?maskable("ip",pub.ip)+(v.active?"<br><small class='m'>這是 VPN 出口，不是你的 ISP</small>":""):"未查詢");
-    if(pub&&pub.org)h+=R((v.active?"出口業者":"ISP")+ti("isp"),esc(pub.org));
+    h+=R("對外 IP"+ti("publicip"),pub&&pub.ip?maskable("ip",pub.ip)+(v.active?"<br><small class='m'>這是 VPN 的出口，不是你家的網路公司</small>":""):"未查詢");
+    if(pub&&pub.org)h+=R((v.active?"VPN 業者":"網路公司")+ti("isp"),esc(pub.org));
     let adv=R("MTU"+ti("mtu"),en.mtu||"—")+R("Proxy"+ti("proxy"),(en.proxy||[]).join("、")||"無")+R("IPv6"+ti("ipv6"),en.ipv6?"可用":(en.ipv6_via_vpn_only?"不可用（VPN 期間通常會停用）":"不可用"));
     if(w)adv+=R("網路名稱",w.ssid?maskable("ssid",w.ssid):"系統未提供（macOS 隱私限制）");
     h+=`</table><details style="margin-top:8px"><summary style="cursor:pointer;color:var(--mute);font-size:12px">進階資訊（MTU、Proxy、IPv6…）</summary><table>${adv}</table></details><table>`;
@@ -295,7 +296,7 @@ $("#tgo").onclick=async()=>{
 function renderTrace(j){
   $("#tstat").textContent=j.running?"分析中…（約 10–30 秒）":"完成";
   const st=(j.analysis&&j.analysis.status)||{};
-  let h=`<table><tr><th>跳</th><th>位址</th><th>平均 ms</th><th>最高 ms</th><th>丟包</th></tr>`+
+  let h=`<table><tr><th>第幾站</th><th>位址</th><th>平均 ms</th><th>最高 ms</th><th>丟包</th></tr>`+
     j.hops.map(p=>`<tr class="hop ${st[p.hop]||""}"><td>${p.hop}</td><td>${esc(p.ip||"—")}</td><td>${fmt(p.avg)}</td><td>${fmt(p.max)}</td><td>${p.loss_pct}%</td></tr>`).join("")+`</table>`;
   if(j.analysis)h=`<div class="diag"><b>${esc(j.analysis.title)}</b><br><small>${esc(j.analysis.detail)}</small></div>`+h;
   $("#tres").innerHTML=h;
@@ -337,7 +338,7 @@ $("#cgo").onclick=async()=>{$("#cgo").disabled=true;$("#cstat").textContent="下
   const r=await fetch("/api/curl",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mb:+$("#csize").value})});$("#cgo").disabled=false;
   $("#cstat").textContent=r.ok?"完成":(await r.json()).detail;loadCurl();};
 async function loadCurl(){try{const d=await J("/api/curl");
-  $("#clist").innerHTML=d.results.length?`<table><tr><th>時間</th><th>大小</th><th>速度</th><th>連線</th><th>首位元組</th><th>總時間</th><th>備註</th></tr>`+d.results.map(c=>
+  $("#clist").innerHTML=d.results.length?`<table><tr><th>時間</th><th>大小</th><th>速度</th><th>連上花費</th><th>開始回應</th><th>總時間</th><th>備註</th></tr>`+d.results.map(c=>
     `<tr><td>${tm(c.ts)}</td><td>${c.ok?(c.bytes/1e6).toFixed(0)+" MB"+(c.partial?`（原定 ${c.mb||""} MB）`:""):"—"}</td><td>${c.ok?c.mbps+" Mbps":"失敗"}</td><td>${c.connect_ms??"—"} ms</td><td>${c.ttfb_ms??"—"} ms</td><td>${c.seconds??"—"} s</td><td>${c.partial?"時間到，只算已下載的部分 ":""}${esc(c.error||"")}${c.vpn?" 🔒VPN":""}</td></tr>`).join("")+`</table>`:"";}catch(e){}}
 setInterval(pollTest,2000);pollTest();loadCurl();
 async function loadReports(){try{const L=await J("/api/reports");
@@ -355,8 +356,8 @@ setInterval(loadReports,15000);loadReports();
 /* ---------- 設定 ---------- */
 let sTargets=[],dragFrom=null;
 function drawTargets(){
-  $("#stargets").innerHTML=`<tr><th style="width:34px"></th><th style="width:30%">名稱</th><th>位址（網址或 IP）</th><th style="width:120px" title="空白＝使用下方全域門檻">「慢的時候」(p95) 警示門檻 ms</th><th style="width:60px" title="勾選後，不對這個目標發延遲／丟包警示（連續逾時仍會警示）">靜音</th><th style="width:170px">順序／刪除</th></tr>`+sTargets.map((t,i)=>
-    `<tr data-row="${i}"><td class="handle" title="按住拖曳，調整順序">⠿</td><td><input type="text" data-i="${i}" data-f="name" value="${esc(t.name)}"></td><td><input type="text" data-i="${i}" data-f="host" value="${esc(t.host)}"></td><td><input type="number" min="10" max="5000" placeholder="全域" data-i="${i}" data-f="p95_ms" value="${t.p95_ms??""}"></td><td><input type="checkbox" data-i="${i}" data-f="mute" ${t.mute?"checked":""}></td><td style="white-space:nowrap"><button class="btn" data-up="${i}" ${i===0?"disabled":""} title="往上移">↑</button> <button class="btn" data-dn="${i}" ${i===sTargets.length-1?"disabled":""} title="往下移">↓</button> <button class="btn" data-del="${i}" ${sTargets.length<=1?"disabled":""}>刪除</button></td></tr>`).join("");
+  $("#stargets").innerHTML=`<tr><th style="width:34px"></th><th style="width:30%">名稱</th><th>位址（網址或 IP）</th><th style="width:130px;white-space:nowrap" title="留空＝使用下方「警示」的設定">慢的時候門檻 ms${ti("p95")}</th><th style="width:60px" title="勾選後，不對這個目標發延遲／丟包警示（連續逾時仍會警示）">靜音</th><th style="width:170px">順序／刪除</th></tr>`+sTargets.map((t,i)=>
+    `<tr data-row="${i}"><td class="handle" title="按住拖曳，調整順序">⠿</td><td><input type="text" data-i="${i}" data-f="name" value="${esc(t.name)}"></td><td><input type="text" data-i="${i}" data-f="host" value="${esc(t.host)}"></td><td><input type="number" min="10" max="5000" placeholder="同下方" data-i="${i}" data-f="p95_ms" value="${t.p95_ms??""}"></td><td><input type="checkbox" data-i="${i}" data-f="mute" ${t.mute?"checked":""}></td><td style="white-space:nowrap"><button class="btn" data-up="${i}" ${i===0?"disabled":""} title="往上移">↑</button> <button class="btn" data-dn="${i}" ${i===sTargets.length-1?"disabled":""} title="往下移">↓</button> <button class="btn" data-del="${i}" ${sTargets.length<=1?"disabled":""}>刪除</button></td></tr>`).join("");
   $("#stargets").querySelectorAll("input").forEach(e=>e.oninput=()=>{const t=sTargets[+e.dataset.i];t[e.dataset.f]=e.type==="checkbox"?e.checked:e.value;});
   $("#stargets").querySelectorAll("tr[data-row]").forEach(tr=>{          // 拖拉排序（HTML5 Drag & Drop）
     const i=+tr.dataset.row,h=tr.querySelector(".handle");
@@ -383,10 +384,10 @@ function fillSettings(d){
   $("#sreset").disabled=!d.customized;
 }
 async function loadHealth(){try{const h=(await J("/api/health")).engine,f=v=>v==null?"—":v+" ms";
-  $("#ehealth").innerHTML=`<b style="color:${h.ok?"#16a34a":"#dc2626"}">${h.ok?"✅ 正常：本程式沒有被拖慢，逾時多半是網路本身的問題":"⚠️ 本機偏忙：量測可能受影響（關閉其他吃資源的程式，或減少目標／加大間隔）"}</b><br>
-  每次 ping 的額外耗時（啟動 ping、讀輸出）：中位 ${f(h.overhead_ms.p50)}、慢的時候 ${f(h.overhead_ms.p95)}、最高 ${f(h.overhead_ms.max)}（正常通常 &lt; 50 ms）<br>
-  程式排程延遲：中位 ${f(h.loop_lag_ms.p50)}、p95 ${f(h.loop_lag_ms.p95)}、最高 ${f(h.loop_lag_ms.max)}（正常 &lt; 100 ms）<br>
-  已量測 ${h.pings} 次，其中「ping 被強制結束」${h.hung_pings} 次（目標不回應時偶爾會發生，占比不高就不用擔心）；目前 ${h.targets} 個目標、每 ${h.interval_sec} 秒一次。`;}catch(e){}}
+  $("#ehealth").innerHTML=`<b style="color:${h.ok?"#16a34a":"#dc2626"}">${h.ok?"✅ 正常：本程式沒有被拖慢，逾時多半是網路本身的問題":"⚠️ 電腦偏忙：量測可能被拖慢（可關閉其他很吃資源的程式，或減少目標、拉長量測間隔）"}</b><br>
+  每次量測的額外耗時（電腦啟動量測程式所花的時間，不是網路延遲）：一般 ${f(h.overhead_ms.p50)}、慢的時候 ${f(h.overhead_ms.p95)}、最多 ${f(h.overhead_ms.max)}（正常通常小於 50 ms）<br>
+  程式反應延遲（該量的時候晚了多久才量）：一般 ${f(h.loop_lag_ms.p50)}、慢的時候 ${f(h.loop_lag_ms.p95)}、最多 ${f(h.loop_lag_ms.max)}（正常小於 100 ms）<br>
+  已量測 ${h.pings} 次，其中「等太久被強制結束」${h.hung_pings} 次（目標不回應時偶爾會發生，比例不高就不用擔心）；目前 ${h.targets} 個目標、每 ${h.interval_sec} 秒量一次。`;}catch(e){}}
 async function loadSettings(){try{fillSettings(await J("/api/settings"));}catch(e){}loadHealth();}
 $("#ssave").onclick=async()=>{
   const body={targets:sTargets.map(t=>{const o={name:t.name,host:t.host};if(t.p95_ms!==""&&t.p95_ms!=null)o.p95_ms=+t.p95_ms;if(t.mute)o.mute=true;return o;}),interval_sec:+$("#s_interval").value,ping_timeout_sec:+$("#s_timeout").value,

@@ -1,5 +1,4 @@
 import asyncio
-import pytest
 from fastapi.testclient import TestClient
 import alerts as alerts_mod
 import diagnose as dg

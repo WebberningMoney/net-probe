@@ -19,7 +19,7 @@ def test_regular_spikes_found():
     s = series(300, spike_every=4)
     r = j.analyze(s, {}, True)
     assert r["ok"] and r["period_s"] == 4 and r["regularity"] >= 0.5 and r["per_min"] > 10
-    assert any("每 4 秒" in x for x in r["findings"]) and any("區網" in x for x in r["findings"])
+    assert any("每 4 秒" in x for x in r["findings"]) and any("家裡這一段" in x for x in r["findings"])
 
 
 def test_minute_period_hint():

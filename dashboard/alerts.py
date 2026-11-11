@@ -1,16 +1,17 @@
-"""alerts.py —— 告警規則、冷卻時間、macOS 通知。
+"""alerts.py —— 什麼時候要通知你、以及怎麼通知（macOS 右上角的通知）。
 
-規則（門檻在 config.json 的 alerts 調整）：
-  timeouts  連續逾時 ≥ N 次（預設 5）            → 可能整條線斷了
-  loss      近 60 秒丟包率 ≥ X%（預設 10）       → 連線品質明顯變差
-  p95       近 60 秒 p95 延遲 ≥ Y ms（預設 150） → 常有明顯延遲尖峰
-冷卻：同一規則 + 同一目標，N 秒內只通知一次（預設 300），避免連續轟炸。
+三種情況會通知（數值在網頁「設定」頁調整）：
+  連續沒回應  連續 N 次沒有回應（預設 5 次）              → 可能整條網路斷了
+  丟包        最近 1 分鐘丟包率 ≥ X%（預設 10%）          → 連線品質明顯變差
+  慢的時候    最近 1 分鐘「慢的時候」(p95) ≥ Y 毫秒（預設 150） → 常常突然卡一下
+每個目標也可以單獨設定「慢的時候」門檻，或設成靜音（見 settings.py）。
+避免一直吵：同一種問題、同一個目標，在冷卻時間內（預設 300 秒）只通知一次；
+三個以上目標同時出事，合併成一則通知。
 """
 from __future__ import annotations
 
 import subprocess
 import sys
-import time
 from collections import deque
 from typing import Callable, Optional
 
@@ -78,7 +79,7 @@ class AlertManager:
                 if s["loss_pct"] >= c["loss_pct_1m"]:
                     cands.append(("loss", name, f"{who} 近 1 分鐘丟包率 {s['loss_pct']}%", "warning"))
                 if s["p95"] is not None and s["p95"] >= p95_thr:
-                    cands.append(("p95", name, f"{who} 近 1 分鐘「慢的時候」(p95) 延遲 {s['p95']} ms", "warning"))
+                    cands.append(("p95", name, f"{who} 最近 1 分鐘「慢的時候」延遲 {s['p95']} ms", "warning"))
         # 先濾掉冷卻中的，再依規則分組
         by_rule: dict = {}
         for rule, name, message, severity in cands:
@@ -92,9 +93,9 @@ class AlertManager:
                 # 💡 多個目標「同時」出問題，幾乎一定是共同原因（本機網路/Wi-Fi），
                 #    合併成一則比跳出一排通知更好讀。
                 names = "、".join("路由器" if n == self.router_name else n for n, _, _ in items)
-                tail = {"timeouts": "同時連續逾時，本機網路可能已中斷（Wi-Fi 斷線？）",
-                        "loss": "近 1 分鐘同時丟包，多半是本機網路或 Wi-Fi 的問題",
-                        "p95": "近 1 分鐘同時出現延遲尖峰，多半是共同路徑（Wi-Fi／路由器／ISP）的問題"}[rule]
+                tail = {"timeouts": "同時連續沒有回應，你的網路可能斷了（Wi-Fi 斷線？）",
+                        "loss": "最近 1 分鐘同時丟包，多半是你家網路或 Wi-Fi 的問題",
+                        "p95": "最近 1 分鐘同時變慢，多半是大家共用的那一段（Wi-Fi、路由器或網路公司）的問題"}[rule]
                 self._emit(fired, ts, rule, "全部", f"{len(items)} 個目標（{names}）{tail}", items[0][2])
             else:
                 for name, message, severity in items:

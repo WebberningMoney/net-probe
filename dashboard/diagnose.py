@@ -26,7 +26,7 @@ def diagnose(summaries: dict, router_name: str | None, cfg: dict | None = None) 
            if k != router_name and v["count"] >= th["min_samples"]}
     if router is None:
         return {"code": "no_router", "title": "未偵測到路由器",
-                "detail": "找不到預設閘道（可能沒連上網路），無法判斷問題在哪一段。"}
+                "detail": "找不到家裡的路由器（可能沒連上網路），無法判斷問題在哪一段。"}
     if router["count"] < th["min_samples"] or not ext:
         return {"code": "unknown", "title": "資料還不夠",
                 "detail": f"至少需要 {th['min_samples']} 筆樣本才能判讀，請再等一下。"}
@@ -34,12 +34,12 @@ def diagnose(summaries: dict, router_name: str | None, cfg: dict | None = None) 
     bad_names = [k for k, v in ext.items() if _bad(v, th["ext_loss_pct"], th["ext_p95_ms"])]
     if router_bad:
         return {"code": "local", "title": "問題偏向你這一端（Wi-Fi／路由器）",
-                "detail": "路由器本身就有延遲尖峰或丟包。可試著：靠近路由器、改用網路線、重新啟動路由器。"}
+                "detail": "連到家裡路由器這一小段就不穩。可以試試：靠近路由器、關掉藍牙、重新啟動路由器、換 Wi-Fi 頻道。"}
     if len(bad_names) * 2 >= len(ext):
-        return {"code": "upstream", "title": "問題偏向路由器之後（ISP 或遠端）",
+        return {"code": "upstream", "title": "問題偏向路由器之後（網路公司或遠端）",
                 "detail": "路由器正常，但多數外部目標都不穩（" + "、".join(bad_names) +
-                          "）。可持續觀察是否固定時段發生，必要時聯絡網路業者。"}
+                          "）。可持續觀察是否固定時段發生，必要時聯絡網路公司。"}
     if bad_names:
         return {"code": "target", "title": "只有部分目標不穩",
-                "detail": "不穩的只有：" + "、".join(bad_names) + "，可能是該目標自己的問題。"}
+                "detail": "不穩的只有：" + "、".join(bad_names) + "，可能是那幾個目標自己的問題，你的網路本身沒事。"}
     return {"code": "ok", "title": "目前正常", "detail": "路由器與外部目標都在正常範圍。"}
