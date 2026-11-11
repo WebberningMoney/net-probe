@@ -77,6 +77,7 @@ class Engine:
         self._fp = None
         self._last_env_check = -10**9
         self._last_wifi_check = -10**9
+        self.wifi_refresh = cfg.get("wifi_refresh_sec", 300)
         self._wifi_busy = False
         self.public_lookup = cfg.get("public_ip_lookup", True)
         self.test: dict = {"state": "idle"}     # 定時測試狀態
@@ -107,6 +108,7 @@ class Engine:
             self.gateway_ip = None
         self._last_gw_check = -10**9
         self.public_lookup = cfg.get("public_ip_lookup", True)
+        self.wifi_refresh = cfg.get("wifi_refresh_sec", 300)
         history = self.alerts.history
         self.alerts = AlertManager(cfg.get("alerts"), self.router_name, self._notifier)
         self.alerts.history = history
@@ -146,10 +148,22 @@ class Engine:
             if self.env.get("gateway") and self.gateway_enabled:
                 self.gateway_ip = self.env["gateway"]      # 與路由器目標保持一致
             self._check_change()
-        if now - self._last_wifi_check >= 60 and not self._wifi_busy:
-            self._last_wifi_check = now
-            self._wifi_busy = True
-            asyncio.create_task(self._refresh_wifi())
+        # 💡 Wi-Fi 詳細資訊來自 system_profiler，它會讓 Wi-Fi 網卡「掃描周圍網路」（約 7 秒），
+        #    掃描時網卡暫時離開目前頻道 → 全部目標一起出現延遲尖峰。所以預設每 5 分鐘才更新一次，
+        #    可在設定頁調整或關閉（0＝只在手動按「更新 Wi-Fi 資訊」時才執行）。
+        every = self.wifi_refresh
+        if every and now - self._last_wifi_check >= every and not self._wifi_busy:
+            self.request_wifi_refresh(now)
+
+    def request_wifi_refresh(self, now: float | None = None) -> bool:
+        if self._wifi_busy:
+            return False
+        self._last_wifi_check = now if now is not None else time.monotonic()
+        self._wifi_busy = True
+        self.events.append({"ts": int(time.time()), "minor": True,
+                            "text": "Wi-Fi 詳細資訊更新（macOS 會掃描周圍網路，可能造成短暫延遲跳動）"})
+        asyncio.create_task(self._refresh_wifi())
+        return True
 
     async def _refresh_wifi(self) -> None:
         try:
@@ -474,6 +488,11 @@ def create_app(cfg: dict | None = None, storage: Storage | None = None,
     def env():
         """網路環境。SSID／對外 IP 預設由網頁遮蔽，這裡回傳原值（只綁本機）。"""
         return {"env": engine.env, "wifi": engine.wifi, "public": engine.public or None}
+
+    @app.post("/api/wifi/refresh")
+    def wifi_refresh():
+        """手動更新 Wi-Fi 詳細資訊（會觸發 macOS 掃描，可能讓延遲短暫跳動）。"""
+        return {"started": engine.request_wifi_refresh()}
 
     @app.get("/api/events")
     def events():

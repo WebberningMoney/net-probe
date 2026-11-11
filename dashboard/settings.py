@@ -12,7 +12,7 @@ from pathlib import Path
 
 import traceroute as tr
 
-EDITABLE = ("targets", "interval_sec", "ping_timeout_sec", "gateway", "alerts", "public_ip_lookup", "curl_test")
+EDITABLE = ("targets", "interval_sec", "ping_timeout_sec", "gateway", "alerts", "public_ip_lookup", "wifi_refresh_sec", "curl_test")
 _NAME_BAD = re.compile(r"[\x00-\x1f<>&\"']")
 
 
@@ -63,6 +63,7 @@ def validate(body: dict, router_name_default: str = "路由器") -> dict:
         "p95_ms_1m": _num(a.get("p95_ms_1m", 150), 10, 5000, "p95 門檻（ms）"),
         "consecutive_timeouts": _num(a.get("consecutive_timeouts", 5), 2, 120, "連續逾時次數", integer=True)}
     out["public_ip_lookup"] = bool(body.get("public_ip_lookup", True))
+    out["wifi_refresh_sec"] = 0 if not body.get("wifi_refresh_sec") else _num(body["wifi_refresh_sec"], 60, 3600, "Wi-Fi 資訊更新間隔（秒）", integer=True)
     url = str((body.get("curl_test") or {}).get("url", "")).strip()
     if url:
         if not re.match(r"^https://[^\s]+$", url) or "{bytes}" not in url:

@@ -41,5 +41,6 @@
     "router_p95_ms": 30,
     "ext_loss_pct": 2.0,
     "ext_p95_ms": 80
-  }
+  },
+  "wifi_refresh_sec": 300
 }

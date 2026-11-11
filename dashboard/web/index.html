@@ -50,9 +50,9 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
   <p class="hint">• MOS 對「偶爾的尖峰」比較寬容，所以它可能是「良好」、但下方的分數（嚴格版，看平均與抖動）卻是 Poor——兩者回答的問題不同：MOS＝通話順不順，分數＝整體網路穩不穩。<br>• 開 VPN 時延遲會包含繞到 VPN 伺服器的距離，分數會偏低，但 MOS 通常仍不錯。<br>• 滿分約 4.4（理想網路也到不了 4.5）。</p></details>
 <div class="panel"><h3>延遲走勢（毫秒，愈低愈好）</h3>
     <div class="row" id="ranges"></div><svg id="chart" class="chart"></svg><div id="legend" class="legend"></div>
-    <div class="hint">灰色虛線＝網路環境變化（VPN 開關、換 Wi-Fi 頻道等）。1 小時以內為平均值，24 小時以上為每分鐘平均。</div></div>
+    <div class="hint">灰色虛線＝網路環境變化（VPN 開關、換 Wi-Fi 頻道等）；淡藍點線＝Wi-Fi 資訊更新（macOS 會掃描，可能造成尖峰）。1 小時以內為平均值，24 小時以上為每分鐘平均。</div></div>
   <div class="grid">
-    <div class="panel"><h3>網路環境</h3><table id="env"></table></div>
+    <div class="panel"><h3>網路環境 <button class="btn" id="wifiref" style="float:right;font-size:12px" title="會觸發 macOS 掃描 Wi-Fi，可能造成短暫延遲跳動">更新 Wi-Fi 資訊</button></h3><table id="env"></table></div>
     <div class="panel"><h3>最近警示與事件</h3><ul class="list" id="alerts"></ul></div>
   </div>
 </section>
@@ -84,6 +84,8 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
     <label>測量間隔（秒）<input type="number" id="s_interval" step="0.5" min="0.5" max="10"></label>
     <label>逾時（秒）<input type="number" id="s_timeout" min="1" max="5"></label>
     <label><input type="checkbox" id="s_gw"> 同時測路由器　名稱 <input type="text" id="s_gwname" style="width:120px"></label>
+    <label>Wi-Fi 詳細資訊更新間隔 <select id="s_wifi" class="btn"><option value="0">不自動更新（手動）</option><option value="60">每 1 分鐘</option><option value="300">每 5 分鐘（預設）</option><option value="900">每 15 分鐘</option></select></label>
+    <div class="hint" style="margin:-4px 0 4px 0">更新時 macOS 會掃描周圍 Wi-Fi，全部目標可能同時出現一次短暫延遲尖峰；若你的圖上有規律的尖峰，請先調長或關閉這項。</div>
     <label><input type="checkbox" id="s_pub"> 查詢對外 IP／ISP（會向 ipinfo.io 發出一次請求）</label></div></div>
   <div class="panel"><h3>警示</h3><div class="form">
     <label><input type="checkbox" id="s_aon"> 啟用警示</label>
@@ -133,7 +135,7 @@ function plot(svg,series,events){
   let o=`<rect x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}" fill="#fafbfc"/>`;
   for(let i=0;i<=4;i++){const v=vmax*i/4,y=Y(v);o+=`<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="#e3e8ef"/><text x="${L-6}" y="${y+4}" text-anchor="end" font-size="11" fill="#6b7788">${Math.round(v)}</text>`;}
   for(let i=0;i<=4;i++){const t=t0+(t1-t0)*i/4;o+=`<text x="${X(t)}" y="${H-6}" text-anchor="middle" font-size="11" fill="#6b7788">${new Date(t*1000).toLocaleTimeString("zh-TW",(t1-t0<3600?{hour12:false,hour:"2-digit",minute:"2-digit",second:"2-digit"}:{hour12:false,hour:"2-digit",minute:"2-digit"}))}</text>`;}
-  (events||[]).filter(e=>e.ts>=t0&&e.ts<=t1).forEach(e=>{o+=`<line x1="${X(e.ts)}" x2="${X(e.ts)}" y1="${T}" y2="${H-B}" stroke="#94a3b8" stroke-dasharray="4 3"><title>${esc(tm(e.ts)+" "+e.text)}</title></line>`;});
+  (events||[]).filter(e=>e.ts>=t0&&e.ts<=t1).forEach(e=>{o+=`<line x1="${X(e.ts)}" x2="${X(e.ts)}" y1="${T}" y2="${H-B}" stroke="${e.minor?"#7dd3fc":"#94a3b8"}" stroke-dasharray="${e.minor?"1 3":"4 3"}"><title>${esc(tm(e.ts)+" "+e.text)}</title></line>`;});
   series.forEach(s=>{let d="",gap=true;s.pts.forEach(p=>{if(p.v==null){gap=true;return;}d+=(gap?"M":"L")+X(p.t).toFixed(1)+" "+Y(p.v).toFixed(1);gap=false;});
     o+=`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="1.6"/>`;
     s.pts.forEach(p=>{if(p.loss>0)o+=`<circle cx="${X(p.t)}" cy="${H-B-3}" r="2.5" fill="#dc2626"><title>${tm(p.t)} 丟包 ${p.loss}%</title></circle>`;});});
@@ -195,11 +197,12 @@ async function side(){
     h+=R("對外 IP",pub&&pub.ip?maskable("ip",pub.ip)+(v.active?"<br><small class='m'>這是 VPN 出口，不是你的 ISP</small>":""):"未查詢");
     if(pub&&pub.org)h+=R(v.active?"出口業者":"ISP",esc(pub.org));
     $("#env").innerHTML=h;
-    const items=[...al.map(a=>({ts:a.ts,t:"⚠️ "+a.message})),...ev.map(x=>({ts:x.ts,t:"🔄 "+x.text}))].sort((a,b)=>b.ts-a.ts).slice(0,12);
+    const items=[...al.map(a=>({ts:a.ts,t:"⚠️ "+a.message})),...ev.filter(x=>!x.minor).map(x=>({ts:x.ts,t:"🔄 "+x.text}))].sort((a,b)=>b.ts-a.ts).slice(0,12);
     $("#alerts").innerHTML=items.length?items.map(x=>`<li>${tm(x.ts)} ${esc(x.t)}</li>`).join(""):"<li><small class='m'>尚無</small></li>";
   }catch(e){}
 }
 
+$("#wifiref").onclick=async()=>{await fetch("/api/wifi/refresh",{method:"POST"});$("#wifiref").textContent="更新中…";setTimeout(()=>{$("#wifiref").textContent="更新 Wi-Fi 資訊";side();},9000);};
 /* ---------- 路徑分析 ---------- */
 $("#tgo").onclick=async()=>{
   $("#tres").innerHTML="";$("#tstat").textContent="啟動中…";
@@ -283,7 +286,7 @@ $("#sadd").onclick=()=>{sTargets.push({name:"",host:""});drawTargets();};
 function fillSettings(d){
   const c=d.settings,a=c.alerts||{};sTargets=(c.targets||[]).map(t=>({...t}));drawTargets();
   $("#s_interval").value=c.interval_sec??1;$("#s_timeout").value=c.ping_timeout_sec??1;
-  $("#s_gw").checked=!!(c.gateway||{}).enabled;$("#s_gwname").value=(c.gateway||{}).name||"路由器";$("#s_pub").checked=c.public_ip_lookup!==false;
+  $("#s_gw").checked=!!(c.gateway||{}).enabled;$("#s_gwname").value=(c.gateway||{}).name||"路由器";$("#s_pub").checked=c.public_ip_lookup!==false;$("#s_wifi").value=String(c.wifi_refresh_sec??300);
   $("#s_aon").checked=a.enabled!==false;$("#s_anotif").checked=a.macos_notification!==false;$("#s_ato").value=a.consecutive_timeouts??5;
   $("#s_aloss").value=a.loss_pct_1m??10;$("#s_ap95").value=a.p95_ms_1m??150;$("#s_acd").value=a.cooldown_sec??300;$("#s_curl").value=(c.curl_test||{}).url||"";
   $("#sreset").disabled=!d.customized;
@@ -296,7 +299,7 @@ async function loadHealth(){try{const h=(await J("/api/health")).engine,f=v=>v==
 async function loadSettings(){try{fillSettings(await J("/api/settings"));}catch(e){}loadHealth();}
 $("#ssave").onclick=async()=>{
   const body={targets:sTargets,interval_sec:+$("#s_interval").value,ping_timeout_sec:+$("#s_timeout").value,
-    gateway:{enabled:$("#s_gw").checked,name:$("#s_gwname").value},public_ip_lookup:$("#s_pub").checked,
+    gateway:{enabled:$("#s_gw").checked,name:$("#s_gwname").value},public_ip_lookup:$("#s_pub").checked,wifi_refresh_sec:+$("#s_wifi").value,
     alerts:{enabled:$("#s_aon").checked,macos_notification:$("#s_anotif").checked,consecutive_timeouts:+$("#s_ato").value,loss_pct_1m:+$("#s_aloss").value,p95_ms_1m:+$("#s_ap95").value,cooldown_sec:+$("#s_acd").value},
     curl_test:{url:$("#s_curl").value}};
   const r=await fetch("/api/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});

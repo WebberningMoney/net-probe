@@ -167,7 +167,7 @@ def test_api_env_series_export_trace(tmp_path):
                 break
             time.sleep(0.05)
         assert len(j["hops"]) == 3 and j["analysis"]["title"] and "VPN" in j["analysis"]["detail"]
-        assert c.get("/api/events").json() == []
+        assert [e for e in c.get("/api/events").json() if not e.get("minor")] == []
 
 
 def test_speedtest_parse():
@@ -338,3 +338,32 @@ def test_total_outage_is_not_marked_unreachable(tmp_path):
             await eng.tick()
         assert eng.dead == set()
     asyncio.run(go())
+
+
+def test_wifi_refresh_interval_and_manual(tmp_path):
+    from app import Engine
+    calls = {"sp": 0}
+
+    async def run(cmd):
+        if cmd[0] == "system_profiler":
+            calls["sp"] += 1
+            return 0, WIFI
+        return await _runner(cmd)
+
+    async def go(cfg_extra, manual=False):
+        calls["sp"] = 0
+        eng = Engine({**CFG, **cfg_extra}, Storage(str(tmp_path / f"w{len(cfg_extra)}{manual}.db")), run)
+        for k in range(4):
+            await eng.refresh_env(1000.0 + k * 20)        # 模擬 60 秒內（0/20/40/60 秒）
+            await asyncio.sleep(0.05)
+        if manual:
+            assert eng.request_wifi_refresh() and not eng.request_wifi_refresh()   # 進行中不重複
+            await asyncio.sleep(0.05)
+        return eng
+    eng = asyncio.run(go({"wifi_refresh_sec": 300}))
+    assert calls["sp"] == 1                                # 5 分鐘內只查第一次
+    asyncio.run(go({"wifi_refresh_sec": 0}))
+    assert calls["sp"] == 0                                # 關閉＝完全不自動查
+    asyncio.run(go({"wifi_refresh_sec": 0}, manual=True))
+    assert calls["sp"] == 1                                # 手動才查一次
+    assert any(e.get("minor") for e in eng.events)
