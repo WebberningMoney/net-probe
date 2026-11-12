@@ -76,5 +76,13 @@ def test_clear_and_export_buttons_are_documented():
 def test_changelog_has_unreleased_section_and_no_stale_names():
     assert "## [Unreleased]" in CHANGELOG
     for text, where in ((README, "README"), (ARCH, "ARCHITECTURE")):
-        for stale in ("rdap.org", "Chart.js", "dashboard.py", "引擎健康度"):
+        for stale in ("rdap.org", "Chart.js", "dashboard.py", "引擎健康度", "程式健康度"):
             assert stale not in text, f"{where} 還留著過時的說法：{stale}"
+
+
+def test_info_tab_explains_how_it_works_and_holds_status_and_about():
+    info = HTML[HTML.index('<section id="info">'):HTML.index('<section id="trace">')]
+    for must in ("NetSonar 怎麼檢測你的網路", "運作狀態", "關於這個程式", 'id="ehealth"', 'id="about"', 'id="quit"', 'data-clear="all"'):
+        assert must in info, f"「說明」分頁少了：{must}"
+    assert "100 −（丟包% × 2 ＋ 平均 ÷ 2 ＋ 抖動 × 1.5）" in info, "說明頁的分數公式要和 stats.ping_score 一致，改公式時兩邊一起改"
+    assert "程式健康度" not in HTML

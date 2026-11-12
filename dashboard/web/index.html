@@ -25,7 +25,8 @@ main{max-width:1180px;margin:0 auto;padding:18px 24px 48px} section{display:none
 #gtip{position:fixed;z-index:60;max-width:300px;background:#16202e;color:#fff;padding:8px 11px;border-radius:8px;font-size:12px;line-height:1.55;display:none;pointer-events:none;box-shadow:0 4px 14px #0004}
 .diag.ok{border-left-color:var(--ok)}.diag.local,.diag.upstream,.diag.target{border-left-color:var(--warn)}
 .diag small{color:var(--mute)}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(172px,1fr));gap:8px;margin-bottom:12px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(172px,1fr));gap:8px;margin-bottom:6px}.card{min-width:0}
+.legend2{font-size:12px;color:var(--mute);margin:0 2px 12px}.legend2 i{display:inline-block;width:14px;height:4px;border-radius:2px;vertical-align:middle;margin:0 4px 0 10px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 11px;border-top:3px solid var(--mute)}
 .card.Excellent,.card.Good{border-top-color:var(--ok)}.card.Moderate{border-top-color:var(--warn)}.card.Poor{border-top-color:var(--bad)}.card.dead{border-top-color:#94a3b8;background:#f8fafc}.card.dead .big{color:var(--mute);font-size:22px;line-height:40px}.deadnote{font-size:11px;color:var(--mute);margin-top:6px}
 .card h4{margin:0 0 2px;font-size:12px;color:var(--mute);display:flex;justify-content:space-between}
@@ -41,18 +42,21 @@ table{border-collapse:collapse;width:100%} td,th{padding:5px 8px;border-bottom:1
 td.k{color:var(--mute);width:38%} .mask{cursor:pointer;color:var(--acc);margin-left:8px;font-size:12px}
 ul.list{margin:0;padding-left:18px} ul.list li{margin:3px 0} small.m{color:var(--mute)} .hint{color:var(--mute);font-size:12px}
 input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:14px;width:240px}
+details.how{border-top:1px solid var(--line);padding:8px 0}details.how summary{cursor:pointer;font-weight:600}details.how>div{margin:6px 0 2px 18px;font-size:13px;line-height:1.7;color:var(--ink)}details.how ul{margin:4px 0;padding-left:20px}
+#tmap{width:100%;height:auto;max-height:420px;border:1px solid var(--line);border-radius:8px;background:#f1f6fb;margin:8px 0}
 .hop.high td{background:#fef2f2}.hop.none td{color:var(--mute)}
 .form{display:grid;gap:10px}.form label{display:flex;gap:8px;align-items:center}.form input[type=number]{width:80px;border:1px solid var(--line);border-radius:8px;padding:5px 8px}#stargets input{width:100%}#stargets .btn{white-space:nowrap}#stargets .handle{cursor:grab;color:var(--mute);text-align:center;user-select:none;font-size:18px}#stargets tr.dragging{opacity:.4}#stargets tr.dropmark td{border-top:2px solid var(--acc)}code{background:#eef2f6;padding:1px 5px;border-radius:4px}</style>
 </head>
 <body>
 <header><img src="/icon.svg" alt=""><div><b>NetSonar</b> <small>網路聲納</small></div>
-<nav><button data-t="live" class="on">即時</button><button data-t="hist">歷史</button><button data-t="test">定時測試</button><button data-t="trace">路徑分析</button><button data-t="set">設定</button></nav></header>
+<nav><button data-t="live" class="on">即時</button><button data-t="hist">歷史</button><button data-t="test">定時測試</button><button data-t="trace">路徑分析</button><button data-t="set">設定</button><button data-t="info">說明</button></nav></header>
 <main>
 <div id="offbar"></div>
 <section id="live" class="on">
   <div id="busybar"></div><div id="vpnbar"></div>
   <div id="diag" class="advice"></div>
   <div id="cards" class="cards"></div>
+  <div class="legend2">卡片上緣的顏色代表「分數」<span class="i" tabindex="0" data-g="score">ⓘ</span>：<i style="background:var(--ok);margin-left:4px"></i>75 分以上，順暢<i style="background:var(--warn)"></i>60～74，偶爾會卡<i style="background:var(--bad)"></i>60 以下（距離遠的目標本來就偏低）<i style="background:#94a3b8"></i>沒有回應</div>
   <details class="panel" id="mosinfo"><summary style="cursor:pointer;font-weight:600">❓ MOS 是什麼？怎麼看？</summary>
   <p><b>MOS（Mean Opinion Score）＝通話品質分</b>。電信業用它回答一個問題：<b>現在用這條網路打視訊或語音通話，聽起來順不順？</b>本工具用延遲、抖動、丟包換算出近似值（簡化的 ITU-T E-model），範圍 1～4.5。</p>
   <table><tr><th>MOS</th><th>白話意思</th></tr><tr><td>4.3 以上</td><td>極佳：通話幾乎感覺不到網路存在</td></tr><tr><td>4.0 – 4.3</td><td>良好：多數人不會察覺問題</td></tr><tr><td>3.6 – 4.0</td><td>尚可：偶爾有點延遲或雜音，部分人會注意到</td></tr><tr><td>3.1 – 3.6</td><td>不佳：明顯卡頓、搶話</td></tr><tr><td>3.1 以下</td><td>很差：通話困難</td></tr></table>
@@ -98,7 +102,7 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
     <label><input type="checkbox" id="s_gw"> 同時量家裡的路由器<span class="i" tabindex="0" data-g="gateway">ⓘ</span>（建議開啟，找問題的關鍵）　顯示名稱 <input type="text" id="s_gwname" style="width:120px"></label>
     <label>Wi-Fi 詳細資訊更新間隔 <select id="s_wifi" class="btn"><option value="0">不自動更新（手動）</option><option value="60">每 1 分鐘</option><option value="300">每 5 分鐘（預設）</option><option value="900">每 15 分鐘</option></select></label>
     <div class="hint" style="margin:-4px 0 4px 0">讀取時 macOS 會掃描周圍的 Wi-Fi，所有目標可能同時跳一下。如果圖上有固定間隔的跳動，可以先把這裡調長或關閉，看看是不是它造成的。</div>
-    <label><input type="checkbox" id="s_pub"> 查詢對外 IP、網路公司與 DNS 服務商名稱（會連到 ipinfo.io，只在網路環境改變時查）</label></div></div>
+    <label><input type="checkbox" id="s_pub"> 查詢對外 IP、網路公司、DNS 服務商名稱，以及路徑分析每一站的大約位置（會連到 ipinfo.io）</label></div></div>
   <div class="panel"><h3>警示</h3><div class="form">
     <label><input type="checkbox" id="s_aon"> 啟用警示</label>
     <label><input type="checkbox" id="s_anotif"> 同時跳出 macOS 通知</label>
@@ -108,20 +112,48 @@ input[type=text]{border:1px solid var(--line);border-radius:8px;padding:6px 10px
     <label>同一類問題 <input type="number" id="s_acd" min="10" max="3600"> 秒內只通知一次（避免一直吵）</label></div></div>
   <details class="panel"><summary style="cursor:pointer;font-weight:600">進階：下載測試網址</summary>
     <div class="hint">一般不用改，留空就是用 Cloudflare。若要換成別的測速網址：必須以 https 開頭，並在網址中用 <code>{bytes}</code> 代表要下載的大小。</div>
-    <input type="text" id="s_curl" style="width:100%;margin-top:8px"></details>
-  <div class="panel"><h3>程式健康度 <small class="hint">（分辨「網路不穩」還是「電腦太忙、量測被拖慢」）</small></h3><div id="ehealth" class="hint">讀取中…</div></div>
+    <div style="margin-top:8px;font-size:13px">目前使用：<code id="s_curlnow">—</code></div>
+    <input type="text" id="s_curl" style="width:100%;margin-top:8px" aria-label="自訂下載測試網址"></details>
+  <div class="row"><button class="btn pri" id="ssave">儲存設定</button><button class="btn" id="sreset">恢復預設</button><a class="btn" id="sexport" href="/api/settings/export" style="text-decoration:none;color:var(--ink)">⬇ 匯出設定</a><button class="btn" id="simport">⬆ 匯入設定</button><input type="file" id="sfile" accept=".json,application/json" style="display:none"><span id="smsg" class="hint"></span></div>
+  <div class="hint">設定會保存在這台電腦，更新程式時不會被覆蓋。按「恢復預設」可回到程式內建的設定。<br>「匯出設定」會把<b>已儲存</b>的設定存成一個檔案（還沒按「儲存設定」的修改不會包含在內）；「匯入設定」可以把之前匯出的檔案讀回來，也可以拿到另一台電腦使用。</div>
+</section>
+<section id="info">
+  <div class="panel"><h3>NetSonar 怎麼檢測你的網路</h3>
+    <div class="hint">想知道畫面上的數字和建議是怎麼來的，點開下面的項目。</div>
+    <details class="how" open><summary>① 怎麼量？</summary><div>
+      像「對著山谷喊一聲，聽回音多久回來」：NetSonar 每隔幾秒，對每個監測目標送出一個很小的測試訊號（就是電腦內建的 <code>ping</code>），記下多久收到回應、有沒有收到。
+      <ul><li>各個目標的時間是錯開的，不會同一瞬間一起送。</li><li>除了你設定的目標，還會自動找出<b>家裡的路由器</b>一起量。這是判斷「問題在家裡還是外面」的關鍵。</li><li>目前的設定：<span id="how_now">讀取中…</span></li></ul></div></details>
+    <details class="how"><summary>② 數字怎麼算？</summary><div><ul>
+      <li><b>平均</b>：最近 5 分鐘所有回應時間的平均。</li>
+      <li><b>慢的時候</b>：把回應時間由快排到慢，100 次裡有 95 次比它快的那個數字。比平均更接近你「感覺到卡」的時候。</li>
+      <li><b>抖動</b>：前後兩次回應時間差距的平均。越大代表越忽快忽慢。</li>
+      <li><b>丟包</b>：送出去卻沒有回應的比例。</li>
+      <li><b>分數</b>（0～100）＝ 100 −（丟包% × 2 ＋ 平均 ÷ 2 ＋ 抖動 × 1.5）。這是本工具自己的算法，適合互相比較，不是業界標準。因為平均延遲會扣分，距離遠的目標分數本來就低。</li>
+      <li><b>MOS</b>（1～4.5）：把延遲、抖動、丟包換算成「拿來通話順不順」的分數，用的是電信業常見的簡化公式。</li></ul></div></details>
+    <details class="how"><summary>③ 顏色代表什麼？</summary><div>卡片上緣的顏色看「分數」：綠＝75 以上、黃＝60～74、紅＝60 以下、灰＝一直沒有回應。<br>「整體網路建議」的燈號另外看各項檢查的結果：🟢 正常、🟡 值得留意、🔴 建議處理、ℹ️ 參考資訊。</div></details>
+    <details class="how"><summary>④ 怎麼判斷問題出在哪一段？</summary><div>比較「路由器」和「外面的目標」：
+      <ul><li>連路由器都不穩 → 問題偏向<b>你家裡</b>（Wi-Fi、路由器、這台電腦）。</li><li>路由器很穩，但一半以上的外部目標不穩 → 問題偏向<b>家以外</b>（網路公司或更遠的地方）。</li><li>只有少數目標不穩 → 多半是<b>那幾個目標自己</b>的問題。</li></ul>
+      「抖動」那一段還會看延遲突然變高（尖峰）多久來一次、有沒有固定規律，再提出可以試試的做法。這些都是<b>推測</b>，不是鑑定。</div></details>
+    <details class="how"><summary>⑤ 什麼時候會通知我？</summary><div>連續好幾次沒有回應、最近 1 分鐘丟包太多、或最近 1 分鐘「慢的時候」太慢，就會跳出通知。同一類問題在一段時間內只通知一次；三個以上目標同時出事會合併成一則。門檻都可以在「設定」頁調整。</div></details>
+    <details class="how"><summary>⑥ 資料存多久？會傳到哪裡？</summary><div>所有量測結果只存在這台電腦：每秒的原始資料保留 24 小時，每分鐘的平均保留 90 天，測試報告保留到你刪除為止。<br>
+      會對外連線的只有：你設定的監測目標與路由器（ping）、<code>ipinfo.io</code>（查對外 IP、DNS 服務商、路徑分析每一站的大約位置；可在「設定」頁關閉），以及你按下按鈕時才執行的下載測速（<code>speed.cloudflare.com</code>）與路徑分析。</div></details>
+    <details class="how"><summary>⑦ 一直開著，會影響電腦或被當成網路攻擊嗎？</summary><div><ul>
+      <li><b>流量很小</b>：以 9 個目標、每秒量一次為例，來回合計約每秒 1.5 KB，一天約 130 MB。家用寬頻感覺不到；但用手機熱點時會算進流量。</li>
+      <li><b>被當成攻擊的機會很低</b>：每秒一次就是電腦內建 ping 的預設頻率；預設目標都是 Google、Cloudflare、中華電信這類公共服務，本來就承受非常大量的連線。它們頂多會限制 ping 的回應速度（畫面上會變成少量丟包）。</li>
+      <li><b>建議</b>：不要把小型網站或公司內部主機加進監測目標；想更保守，可以到「設定」頁把「每隔幾秒量一次」調成 2～5 秒。</li>
+      <li><b>對電腦</b>：CPU 負擔很低；筆電用電池時會多耗一點電。讀取 Wi-Fi 詳細資訊時（預設每 5 分鐘）系統會掃描周圍網路，延遲可能短暫跳一下。</li></ul></div></details>
+  </div>
+  <div class="panel"><h3>運作狀態 <small class="hint">（NetSonar 自己有沒有正常運作？分辨「網路不穩」還是「電腦太忙、量測被拖慢」）</small></h3><div id="ehealth" class="hint">讀取中…</div></div>
   <div class="panel"><h3>關於這個程式</h3><div id="about" class="hint">讀取中…</div>
     <div class="row" style="margin-top:8px"><button class="btn" id="quit">⏻ 停止 NetSonar</button><button class="btn danger" data-clear="all" data-label="所有紀錄（量測、警示與事件、測試報告、下載測速、路徑分析）">🗑 清除所有紀錄</button></div>
     <div class="hint">換到不同的環境測試（例如換了路由器、搬到別的地方）之前，可以先「清除所有紀錄」，新舊資料才不會混在一起。你的設定（監測目標、警示門檻）不會被清除。</div>
     <div class="hint">關掉瀏覽器<b>不會</b>停止量測，NetSonar 會繼續在背景記錄並在網路變差時通知你。按上面的按鈕才會真的停止；之後打開「應用程式」裡的 NetSonar（或下次登入電腦）就會再啟動。想完全移除請雙擊 <code>解除安裝.command</code>。</div></div>
-  <div class="row"><button class="btn pri" id="ssave">儲存設定</button><button class="btn" id="sreset">恢復預設</button><span id="smsg" class="hint"></span></div>
-  <div class="hint">設定會保存在這台電腦，更新程式時不會被覆蓋。按「恢復預設」可回到原廠設定。</div>
 </section>
 <section id="trace">
   <div class="panel"><h3>路徑分析（Traceroute）<span class="acts"><a class="btn sm" id="tcsv" href="#" style="display:none" title="下載成表格檔，可用 Excel／Numbers 打開">⬇ 下載 CSV</a><button class="btn sm danger" data-clear="trace" data-label="路徑分析結果" title="清除後無法復原">🗑 清除</button></span></h3>
     <div class="row"><input type="text" id="thost" value="1.1.1.1" aria-label="目標"><button class="btn pri" id="tgo">開始分析</button><span class="hint" id="tstat"></span></div>
     <div id="tres"></div>
-    <div class="hint">列出資料從你家到目標，一路經過的每一站和各站的延遲（約需 10～30 秒）。<br>「—」代表那一站不回應，很常見，不代表有問題。要注意的是：延遲從某一站開始變高，而且之後每一站都一直很高，問題多半就在那一站附近。只有單獨一站特別高、後面又恢復正常，通常不用擔心。</div></div>
+    <div class="hint">列出資料從你家到目標，一路經過的每一站、各站的延遲，以及每一站的大約位置與服務商（約需 10～30 秒）。位置與服務商是向 ipinfo.io 查詢的，只會送出各站的位址，家裡的內部位址不會送出。<br>「—」代表那一站不回應，很常見，不代表有問題。要注意的是：延遲從某一站開始變高，而且之後每一站都一直很高，問題多半就在那一站附近。只有單獨一站特別高、後面又恢復正常，通常不用擔心。</div></div>
 </section>
 </main>
 <div id="gtip"></div>
@@ -255,13 +287,19 @@ async function drawHist(){
 }
 
 /* ---------- 即時：卡片 / 判讀 / 環境 ---------- */
+/* 讓每一列的卡片張數盡量平均：例如 9 張排成 5＋4，而不是 6＋3 */
+function layoutCards(){const el=$("#cards"),n=el.children.length;if(!n||!el.clientWidth)return;
+  const maxCols=Math.max(1,Math.floor((el.clientWidth+8)/178)),rows=Math.ceil(n/maxCols),cols=Math.ceil(n/rows);
+  el.style.gridTemplateColumns=`repeat(${cols},minmax(0,1fr))`;}
+addEventListener("resize",layoutCards);
 function cards(sum){
   deadNames=new Set(Object.entries(sum).filter(([n,v])=>v.unreachable).map(([n])=>n));
   setH($("#cards"),targets.map(t=>{const s=sum[t.name]||{},cur=latest[t.name],to=cur===null;
     if(s.unreachable)return `<div class="card dead"><h4><span>${esc(t.name)}</span><span>—</span></h4><div class="big">無回應</div><div class="deadnote">這個位址一直沒有回應，但其他目標都正常（開 VPN 時常見，有些網站也會擋這種測試）。已暫停對它的警示；可以到「設定」頁刪除。</div></div>`;
     return `<div class="card ${s.grade||""}"><h4><span>${esc(t.name)}</span><span title="${mosTip}">MOS ${fmt(s.mos)}</span></h4>
     <div class="big ${to?"to":""}">${cur===undefined?"—":to?"逾時":fmt(cur)}<small> ${cur>=0&&cur!==null?"ms":""}</small></div>
-    <dl><dt>平均 / 慢的時候${ti("p95")}</dt><dd>${fmt(s.avg)} / ${fmt(s.p95)}</dd><dt>抖動${ti("jitter")}</dt><dd>${fmt(s.jitter)}</dd><dt>丟包${ti("loss")}</dt><dd>${s.loss_pct??"—"}%</dd><dt>分數${ti("score")}</dt><dd>${fmt(s.score)} ${s.grade||""}</dd></dl>${s.avg>50&&(s.jitter??99)<10&&(s.loss_pct??9)<1&&t.name!==routerName?`<div class="far">距離較遠，偏慢屬正常</div>`:""}</div>`;}).join(""));
+    <dl><dt>平均${ti("avg")}</dt><dd>${fmt(s.avg)}</dd><dt>慢的時候${ti("p95")}</dt><dd>${fmt(s.p95)}</dd><dt>抖動${ti("jitter")}</dt><dd>${fmt(s.jitter)}</dd><dt>丟包${ti("loss")}</dt><dd>${s.loss_pct??"—"}%</dd><dt>分數${ti("score")}</dt><dd>${fmt(s.score)} ${s.grade||""}</dd></dl>${s.avg>50&&(s.jitter??99)<10&&(s.loss_pct??9)<1&&t.name!==routerName?`<div class="far">距離較遠，偏慢屬正常</div>`:""}</div>`;}).join(""));
+  layoutCards();
 }
 const priv={ssid:true,ip:true};
 function maskable(key,text){return priv[key]?`${"•".repeat(8)}<span class="mask" onclick="priv['${key}']=false;side()">顯示</span>`:`${esc(text)}<span class="mask" onclick="priv['${key}']=true;side()">隱藏</span>`;}
@@ -274,7 +312,7 @@ async function side(){
     drawAdvice(d);
     cards(sum.targets);
     const hh=(await J("/api/health")).engine;
-    $("#busybar").innerHTML=hh.ok?"":`<div class="banner">⚠️ 電腦偏忙：量測可能被拖慢，這時的逾時不一定是網路問題（詳見「設定」頁底部的程式健康度）。</div>`;
+    $("#busybar").innerHTML=hh.ok?"":`<div class="banner">⚠️ 電腦偏忙：量測可能被拖慢，這時的逾時不一定是網路問題（詳見「說明」頁的運作狀態）。</div>`;
     const v=e.env.vpn||{};
     $("#vpnbar").innerHTML=v.active?`<div class="banner">🔒 VPN 開啟中（${esc(v.interface)}）：所有延遲都包含「繞到 VPN 伺服器」的距離，數字會偏高；「路由器」那張卡片才是你家網路的真實狀況。</div>`:"";
     routerName=(await J("/api/diagnosis")).router;
@@ -302,7 +340,7 @@ $("#wifiref").onclick=async()=>{await fetch("/api/wifi/refresh",{method:"POST"})
 /* ---------- 路徑分析 ---------- */
 let traceId=null;
 $("#tgo").onclick=async()=>{
-  $("#tres").innerHTML="";$("#tstat").textContent="啟動中…";
+  setH($("#tres"),"");$("#tstat").textContent="啟動中…";
   const r=await fetch("/api/traceroute",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({target:$("#thost").value.trim()})});
   if(!r.ok){$("#tstat").textContent=(await r.json()).detail||"失敗";return;}
   const {id}=await r.json();
@@ -310,14 +348,36 @@ $("#tgo").onclick=async()=>{
   for(;;){if(traceId!==id)return;   // 中途被「清除」了
     const j=await J("/api/traceroute/"+id);renderTrace(j);if(!j.running){$("#tcsv").href="/api/traceroute.csv?id="+encodeURIComponent(id);$("#tcsv").style.display="";break;}await new Promise(r=>setTimeout(r,1000));}
 };
+let WORLD=null,worldAsked=false,lastTrace=null;
+function hopRanges(a){   // [2,3,4,7] → "2–4、7"
+  const out=[];let s=a[0],p=a[0];for(let i=1;i<=a.length;i++){if(a[i]===p+1){p=a[i];continue;}out.push(s===p?""+s:s+"–"+p);s=p=a[i];}return out.join("、");}
+function traceMap(j){
+  const pts=j.hops.filter(p=>p.geo&&p.geo.lat!=null).map(p=>({hop:p.hop,lon:p.geo.lon,lat:p.geo.lat,place:p.geo.place||""}));
+  if(!pts.length)return "";
+  if(!WORLD){if(!worldAsked){worldAsked=true;J("/world.json").then(w=>{WORLD=w;if(lastTrace)renderTrace(lastTrace);}).catch(()=>{});}return "";}
+  const lons=pts.map(p=>p.lon);
+  if(Math.max(...lons)-Math.min(...lons)>180)pts.forEach(p=>{if(p.lon<0)p.lon+=360;});   // 跨太平洋的路線：把美洲接在亞洲右邊，線才不會繞過半個地球
+  const groups=[];pts.forEach(p=>{const x=p.lon*5,y=-p.lat*5;let g=groups.find(g=>Math.abs(g.x-x)<1&&Math.abs(g.y-y)<1);if(!g){g={x,y,hops:[],place:p.place};groups.push(g);}g.hops.push(p.hop);});
+  let x0=Math.min(...groups.map(g=>g.x)),x1=Math.max(...groups.map(g=>g.x)),y0=Math.min(...groups.map(g=>g.y)),y1=Math.max(...groups.map(g=>g.y));
+  let w=Math.max(60,(x1-x0)*1.35),hh=Math.max(30,(y1-y0)*1.35);if(w<hh*2)w=hh*2;else hh=w/2;   // 至少顯示約 12 度寬，長寬比 2:1
+  const vx=(x0+x1)/2-w/2;w*=1.3;hh=w/2;   // 右邊多留 30%，最右邊那一站的文字才不會被切掉
+  const vy=(y0+y1)/2-hh/2,u=w/100;
+  const line=groups.length>1?`<polyline points="${groups.map(g=>g.x+","+g.y).join(" ")}" fill="none" stroke="#2f80a8" stroke-width="${u*0.5}" stroke-dasharray="${u*1.2} ${u*0.8}"/>`:"";
+  const dots=groups.map(g=>`<circle cx="${g.x}" cy="${g.y}" r="${u*1.3}" fill="#e8590c" stroke="#fff" stroke-width="${u*0.3}"><title>第 ${hopRanges(g.hops)} 站：${esc(g.place)}</title></circle><text x="${g.x+u*1.9}" y="${g.y+u*0.9}" font-size="${u*2.6}" fill="#16202e" stroke="#fff" stroke-width="${u*0.6}" paint-order="stroke">第 ${hopRanges(g.hops)} 站 ${esc(g.place)}</text>`).join("");
+  return `<svg id="tmap" viewBox="${vx} ${vy} ${w} ${hh}" role="img" aria-label="路徑大約位置地圖"><g fill="#cfd9e3" stroke="#aebccb" stroke-width="${u*0.12}"><path d="${WORLD.path}"/><path d="${WORLD.path}" transform="translate(1800,0)"/></g>${line}${dots}</svg>
+  <div class="hint">地圖只畫出查得到位置的站。位置是依位址<b>推估</b>的（通常只到城市，骨幹設備常顯示成公司登記地），只能當參考；同一個城市的站會合併成一個點。</div>`;}
 function renderTrace(j){
+  lastTrace=j;
   $("#tstat").textContent=j.running?"分析中…（約 10–30 秒）":"完成";
   const st=(j.analysis&&j.analysis.status)||{};
-  let h=`<table><tr><th>第幾站</th><th>位址</th><th>平均 ms</th><th>最高 ms</th><th>丟包</th></tr>`+
-    j.hops.map(p=>`<tr class="hop ${st[p.hop]||""}"><td>${p.hop}</td><td>${esc(p.ip||"—")}</td><td>${fmt(p.avg)}</td><td>${fmt(p.max)}</td><td>${p.loss_pct}%</td></tr>`).join("")+`</table>`;
+  let h=`<table><tr><th>第幾站</th><th>位址</th><th>大約位置</th><th>服務商</th><th>平均 ms</th><th>最高 ms</th><th>丟包</th></tr>`+
+    j.hops.map(p=>{const g=p.geo||{};return `<tr class="hop ${st[p.hop]||""}"><td>${p.hop}</td><td>${esc(p.ip||"—")}</td><td>${esc(g.place||"—")}</td><td>${esc(g.org||"—")}</td><td>${fmt(p.avg)}</td><td>${fmt(p.max)}</td><td>${p.loss_pct}%</td></tr>`;}).join("")+`</table>`;
+  if(!j.running&&j.geo_enabled===false)h+=`<div class="hint">沒有顯示位置與服務商，因為「設定」頁的「查詢對外 IP、網路公司與 DNS 服務商名稱」已關閉。</div>`;
+  h=traceMap(j)+h;
   if(j.analysis)h=`<div class="diag"><b>${esc(j.analysis.title)}</b><br><small>${esc(j.analysis.detail)}</small></div>`+h;
-  $("#tres").innerHTML=h;
+  setH($("#tres"),h);
 }
+
 
 
 /* ---------- 定時測試 / 下載速度 ---------- */
@@ -376,7 +436,7 @@ const afterClear={
   alerts:()=>side(),
   reports:()=>{$("#treport").innerHTML="";delete $("#treport").dataset.k;loadReports();pollTest();},
   curl:()=>loadCurl(),
-  trace:()=>{traceId=null;$("#tres").innerHTML="";$("#tstat").textContent="";$("#tcsv").style.display="none";}};
+  trace:()=>{traceId=null;lastTrace=null;setH($("#tres"),"");$("#tstat").textContent="";$("#tcsv").style.display="none";}};
 document.querySelectorAll("[data-clear]").forEach(b=>b.onclick=async()=>{
   const what=b.dataset.clear;
   if(!confirm(`確定要清除「${b.dataset.label}」嗎？\n\n清除後無法復原。之後還想看的話，請先按「下載 CSV」保存。`))return;
@@ -413,6 +473,8 @@ function fillSettings(d){
   $("#s_gw").checked=!!(c.gateway||{}).enabled;$("#s_gwname").value=(c.gateway||{}).name||"路由器";$("#s_pub").checked=c.public_ip_lookup!==false;$("#s_wifi").value=String(c.wifi_refresh_sec??300);
   $("#s_aon").checked=a.enabled!==false;$("#s_anotif").checked=a.macos_notification!==false;$("#s_ato").value=a.consecutive_timeouts??5;
   $("#s_aloss").value=a.loss_pct_1m??10;$("#s_ap95").value=a.p95_ms_1m??150;$("#s_acd").value=a.cooldown_sec??300;$("#s_curl").value=(c.curl_test||{}).url||"";
+  const cu=(c.curl_test||{}).url||"";$("#s_curl").placeholder="留空＝使用預設："+(d.curl_default_url||"");
+  $("#s_curlnow").textContent=(cu||d.curl_default_url||"")+(cu?"（你自訂的）":"（預設，Cloudflare）");
   $("#sreset").disabled=!d.customized;
 }
 async function loadHealth(){try{const h=(await J("/api/health")).engine,f=v=>v==null?"—":v+" ms";
@@ -424,7 +486,7 @@ async function loadAbout(){try{const a=await J("/api/about");
   $("#about").innerHTML=`執行方式：<b>${a.mode==="service"?"背景服務（登入電腦後自動啟動）":"從終端機啟動（關掉終端機視窗就會停止）"}</b><br>量測資料存在：<code>${esc(a.db_path)}</code><br>你的設定存在：<code>${esc(a.settings_path)}</code>`+(a.log_path?`<br>執行紀錄：<code>${esc(a.log_path)}</code>`:"")+`<br><small>想在 Finder 看這些檔案：選單「前往 → 前往檔案夾」，貼上路徑（到最後一個 / 為止）。</small>`;}catch(e){}}
 $("#quit").onclick=async()=>{if(!confirm("要停止 NetSonar 嗎？\n停止後不會再量測，也不會發通知。\n之後打開「應用程式」裡的 NetSonar，或下次登入電腦，就會再啟動。"))return;
   try{const r=await fetch("/api/quit",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({confirm:true})});if(r.ok){stopped=true;offline(true);}else alert((await r.json()).detail);}catch(e){stopped=true;offline(true);}};
-async function loadSettings(){try{fillSettings(await J("/api/settings"));}catch(e){}loadHealth();loadAbout();}
+async function loadSettings(){try{fillSettings(await J("/api/settings"));}catch(e){}}
 $("#ssave").onclick=async()=>{
   const body={targets:sTargets.map(t=>{const o={name:t.name,host:t.host};if(t.p95_ms!==""&&t.p95_ms!=null)o.p95_ms=+t.p95_ms;if(t.mute)o.mute=true;return o;}),interval_sec:+$("#s_interval").value,ping_timeout_sec:+$("#s_timeout").value,
     gateway:{enabled:$("#s_gw").checked,name:$("#s_gwname").value},public_ip_lookup:$("#s_pub").checked,wifi_refresh_sec:+$("#s_wifi").value,
@@ -435,7 +497,19 @@ $("#ssave").onclick=async()=>{
   $("#smsg").style.color="#16a34a";$("#smsg").textContent="✅ 已儲存，立即生效";fillSettings(await r.json());targets=await J("/api/targets");};
 $("#sreset").onclick=async()=>{if(!confirm("確定恢復為預設設定？你自訂的目標與門檻會被清除。"))return;
   const r=await fetch("/api/settings/reset",{method:"POST"});$("#smsg").style.color="#16a34a";$("#smsg").textContent="已恢復預設";fillSettings(await r.json());targets=await J("/api/targets");};
+$("#simport").onclick=()=>{$("#sfile").value="";$("#sfile").click();};
+$("#sfile").onchange=async e=>{const f=e.target.files[0];if(!f)return;const bad=m=>{$("#smsg").style.color="#dc2626";$("#smsg").textContent="❌ "+m;};
+  let doc;try{doc=JSON.parse(await f.text());}catch(x){return bad("這不是 NetSonar 的設定檔（檔案內容無法讀取）");}
+  const s=doc&&doc.settings?doc.settings:doc;
+  if(!s||typeof s!=="object"||!Array.isArray(s.targets))return bad("這不是 NetSonar 的設定檔（找不到監測目標）");
+  if(!confirm(`要匯入「${f.name}」嗎？\n目前的設定會被這個檔案的內容取代（${s.targets.length} 個監測目標）。\n想保留現在的設定，請先按「匯出設定」。`))return;
+  const r=await fetch("/api/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(s)});
+  if(!r.ok)return bad("匯入失敗："+((await r.json()).detail||"檔案內容不正確"));
+  $("#smsg").style.color="#16a34a";$("#smsg").textContent="✅ 已匯入，立即生效";fillSettings(await r.json());targets=await J("/api/targets");};
 document.querySelector('nav button[data-t=set]').addEventListener("click",loadSettings);
+async function loadInfo(){loadHealth();loadAbout();
+  try{const h=(await J("/api/health")).engine;$("#how_now").textContent=`${h.targets} 個目標（含路由器），每 ${h.interval_sec} 秒量一次。`;}catch(e){}}
+document.querySelector('nav button[data-t=info]').addEventListener("click",loadInfo);
 
 /* ---------- 啟動 ---------- */
 (async()=>{

@@ -94,3 +94,22 @@ def test_clear_all_and_blocked_while_test_running(tmp_path):
         r = c.post("/api/clear", json={"what": "all", "confirm": True}).json()
         assert set(r["cleared"]) == {"samples", "alerts", "reports", "curl", "trace"}
         assert c.get("/api/reports").json() == []
+
+
+def test_settings_export_roundtrip_and_world_map(tmp_path):
+    import json
+    app = create_app({**CFG, "interval_sec": 1, "ping_timeout_sec": 1}, Storage(str(tmp_path / "s.db")), _runner, autostart=False, settings_file=tmp_path / "s.json")
+    with TestClient(app) as c:
+        r = c.get("/api/settings/export")
+        assert "attachment; filename=netsonar-settings-" in r.headers["content-disposition"]
+        doc = json.loads(r.text)
+        assert doc["app"] == "NetSonar" and doc["type"] == "settings"
+        s = doc["settings"]
+        s["targets"] = s["targets"] + [{"name": "新目標", "host": "9.9.9.9", "p95_ms": 250}]
+        assert c.put("/api/settings", json=s).status_code == 200                      # 匯出的內容可以原樣（或修改後）匯入
+        got = c.get("/api/settings").json()
+        assert got["settings"]["targets"][-1] == {"name": "新目標", "host": "9.9.9.9", "p95_ms": 250}
+        assert got["curl_default_url"].startswith("https://speed.cloudflare.com/")
+        assert c.put("/api/settings", json={"targets": "壞掉的檔案"}).status_code == 400
+        w = c.get("/world.json").json()
+        assert w["path"].startswith("M") and len(w["path"]) > 50_000

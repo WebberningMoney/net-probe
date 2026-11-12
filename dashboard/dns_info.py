@@ -11,11 +11,10 @@
 from __future__ import annotations
 
 import ipaddress
-import json
-import re
 import socket
-import urllib.request
 from typing import Optional
+
+import geo
 
 KNOWN = {
     "8.8.8.8": "Google Public DNS", "8.8.4.4": "Google Public DNS",
@@ -50,16 +49,13 @@ def classify(ip: str) -> Optional[dict]:
 
 
 def _clean_org(org: str) -> str:
-    """ipinfo 的 org 長得像 "AS9924 Taiwan Fixed Network ..."：去掉開頭的編號，只留公司名稱。"""
-    return re.sub(r"^AS\d+\s+", "", org or "").strip()[:60]
+    return geo.clean_org(org)
 
 
 def _ipinfo(ip: str, timeout: float) -> tuple:
-    """回傳（公司名稱, 主機名稱）；查不到的部分是 None。"""
-    req = urllib.request.Request(f"https://ipinfo.io/{ip}/json", headers={"Accept": "application/json", "User-Agent": "NetSonar"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        d = json.loads(r.read(100_000).decode("utf-8", "replace"))
-    return (_clean_org(d.get("org", "")) or None, (str(d["hostname"])[:80] if d.get("hostname") else None))
+    """回傳（公司名稱, 主機名稱）；查不到的部分是 None。實際查詢在 geo.py。"""
+    d = geo.lookup_ip(ip, timeout)
+    return d["org"], d["hostname"]
 
 
 def _ptr(ip: str) -> Optional[str]:

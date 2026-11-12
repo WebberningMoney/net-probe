@@ -35,6 +35,7 @@ import traceroute as trace_mod
 import advice as advice_mod
 import dns_info
 import export as export_mod
+import geo
 import jitter as jitter_mod
 import settings as settings_mod
 import speedtest
@@ -105,6 +106,8 @@ class Engine:
         self.dead: set = set()             # 長期完全不回應 ping 的目標（多半是該位址擋 ICMP）
         self.trace_lines = None            # 測試時可注入假的 traceroute 輸出
         self.trace_jobs: dict = {}         # job_id → 路徑分析進度
+        self.geo_lookup = geo.lookup_ip    # 查位址的大約位置與公司；測試時可換成假的
+        self.geo_cache: dict = {}          # 查過的位址記起來，同一站不重複查
 
     @property
     def targets(self) -> list:
@@ -496,17 +499,43 @@ class Engine:
                 for t in self.targets}
 
 
+async def _locate_hop(engine: Engine, hop: dict) -> None:
+    """替路徑上的一站補上「大約位置＋公司名稱」。內部位址直接標示；公開位址才上網查（且要設定允許）。"""
+    ip = hop.get("ip")
+    if not ip:
+        return
+    kind = geo.local_kind(ip)
+    if kind:
+        hop["geo"] = geo.describe_local(kind)
+        return
+    if not engine.public_lookup:
+        return
+    if ip not in engine.geo_cache:
+        try:
+            engine.geo_cache[ip] = await asyncio.to_thread(engine.geo_lookup, ip)
+        except Exception:
+            return                                   # 查不到就算了，不影響路徑分析本身
+        if len(engine.geo_cache) > 500:
+            engine.geo_cache.pop(next(iter(engine.geo_cache)))
+    hop["geo"] = engine.geo_cache[ip]
+
+
 async def _run_trace(engine: Engine, jid: str, host: str) -> None:
-    """背景執行 traceroute，邊跑邊把每一跳放進 job（網頁輪詢即可看到進度）。"""
+    """背景執行 traceroute，邊跑邊把每一站放進 job（網頁輪詢即可看到進度）；每一站同時去查大約位置。"""
     job = engine.trace_jobs[jid]
     lines = engine.trace_lines or trace_mod.iter_lines
+    lookups = []
     try:
         async for line in lines(trace_mod.build_cmd(host)):
             hop = trace_mod.parse_hop_line(line)
             if hop:
                 job["hops"].append(hop)
+                lookups.append(asyncio.create_task(_locate_hop(engine, hop)))
     except Exception as e:
         job["error"] = str(e)
+    if lookups:
+        await asyncio.wait(lookups, timeout=8)       # 最多再等 8 秒，位置查不完也照樣給結果
+    job["geo_enabled"] = engine.public_lookup
     job["analysis"] = trace_mod.analyze_hops(job["hops"], bool(engine.env.get("vpn", {}).get("active")))
     job["running"] = False
 
@@ -651,7 +680,16 @@ def create_app(cfg: dict | None = None, storage: Storage | None = None,
     def _settings_view():
         return {"settings": {k: engine.cfg.get(k) for k in settings_mod.EDITABLE if k in engine.cfg},
                 "defaults": {k: engine.base_cfg.get(k) for k in settings_mod.EDITABLE if k in engine.base_cfg},
-                "customized": sfile.exists()}
+                "customized": sfile.exists(), "curl_default_url": speedtest.DEFAULT_URL}
+
+    @app.get("/api/settings/export")
+    def settings_export():
+        """把目前的設定存成一個檔案（之後可以在「設定」頁匯入，或搬到另一台電腦用）。"""
+        doc = {"app": "NetSonar", "type": "settings", "exported": time.strftime("%Y-%m-%d %H:%M:%S"),
+               "settings": _settings_view()["settings"]}
+        fn = f"netsonar-settings-{time.strftime('%Y%m%d-%H%M%S')}.json"
+        return Response(json.dumps(doc, ensure_ascii=False, indent=2), media_type="application/json",
+                        headers={"Content-Disposition": f"attachment; filename={fn}"})
 
     @app.get("/api/settings")
     def settings_get():
@@ -871,6 +909,12 @@ def create_app(cfg: dict | None = None, storage: Storage | None = None,
 
         return StreamingResponse(gen(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache"})
+
+    @app.get("/world.json")
+    def world():
+        """路徑分析地圖用的簡化世界輪廓（內建檔案，不需要連到任何地圖網站）。"""
+        return FileResponse(BASE / "web" / "world.json", media_type="application/json",
+                            headers={"Cache-Control": "max-age=86400"})
 
     @app.get("/icon.svg")
     def icon():

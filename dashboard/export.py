@@ -87,6 +87,9 @@ def curl_table(results: list) -> str:
 
 
 def trace_table(job: dict) -> str:
-    out = [[h.get("hop"), safe(h.get("ip") or "（不回應）"), _num(h.get("avg")), _num(h.get("max")), _num(h.get("loss_pct"))]
-           for h in job.get("hops", [])]
-    return table(["第幾站", "位址", "平均(ms)", "最高(ms)", "丟包(%)"], out)
+    out = []
+    for h in job.get("hops", []):
+        g = h.get("geo") or {}
+        out.append([h.get("hop"), safe(h.get("ip") or "（不回應）"), safe(g.get("place") or ""), safe(g.get("org") or ""),
+                    _num(h.get("avg")), _num(h.get("max")), _num(h.get("loss_pct"))])
+    return table(["第幾站", "位址", "大約位置", "服務商", "平均(ms)", "最高(ms)", "丟包(%)"], out)

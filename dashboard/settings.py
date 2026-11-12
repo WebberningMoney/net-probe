@@ -2,6 +2,7 @@
 
 💡 設計：程式附帶的預設值在 config.json；你在網頁上改的部分另外存在 settings.json，
    啟動時「蓋」在預設值上面。好處：更新程式不會蓋掉你的設定；按「恢復預設」只要刪掉 settings.json。
+   「匯出設定」就是把目前生效的設定存成檔案；「匯入設定」把檔案內容送回來，同樣要通過下面 validate 的檢查。
    settings.json 放在哪：用終端機啟動時在 dashboard/ 資料夾；用「安裝.command」安裝時在
    ~/Library/Application Support/NetSonar/data/。
 """
